@@ -46,7 +46,7 @@ class SidecarFormat(unittest.TestCase):
         self.assertEqual(sc.mmss_to_seconds("00:01:02"), 62.0)
         self.assertEqual(sc.mmss_to_seconds(3), 3.0)
         self.assertEqual(parse_t("00:01"), 60.0)    # the gotcha the converter exists for: HH:MM, not MM:SS
-        self.assertEqual(parse_t("20"), 72000.0)    # ...and a bare number is hours
+        self.assertEqual(parse_t("20"), 20.0)       # ...and a bare number is already seconds
         for bad in ("", "1:2:3:4", "a:b", True):
             with self.assertRaises(ValueError):
                 sc.mmss_to_seconds(bad)
