@@ -1,0 +1,72 @@
+{
+ "created": "2026-10-09T14:51:04-0400",
+ "model_version": "gemini-3.8-flash",
+ "request": {
+  "fps": 2,
+  "model": "gemini-3.8-flash",
+  "prompt": "You are answering a question about security-camera footage.\n\nCamera clock: the video starts at 12:03:00. The video you are given covers 12:03:00 to 12:03:00.5.\nThe question is asked at 12:03:00.5.\n\nQuestion: Where in the frame is the man in the gray hoodie?\n\nChoose exactly one answer from this list: \"left of the center pillar\", \"right of the center pillar\", \"behind the center pillar\", \"unknown\". Answer \"unknown\" if the footage does not show it.\nCite the moment your answer is based on as t_start and t_end, in seconds from the start of the video.\nStaleness rule: set stale to true if your answer relies on footage that ends before the question time,\nor on evidence more than 900 seconds older than the question time. Otherwise set stale to false.\nGive a one-sentence reason.",
+  "repeat": 2,
+  "schema": {
+   "properties": {
+    "answer": {
+     "enum": [
+      "left of the center pillar",
+      "right of the center pillar",
+      "behind the center pillar",
+      "unknown"
+     ],
+     "type": "STRING"
+    },
+    "reason": {
+     "type": "STRING"
+    },
+    "stale": {
+     "type": "BOOLEAN"
+    },
+    "t_end": {
+     "nullable": true,
+     "type": "NUMBER"
+    },
+    "t_start": {
+     "nullable": true,
+     "type": "NUMBER"
+    }
+   },
+   "propertyOrdering": [
+    "answer",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "required": [
+    "answer",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "type": "OBJECT"
+  },
+  "temperature": 0.0,
+  "video": "40b8ffbbdf8e9dd8f8e1d85e6f51ca81a10f0c62179f310bd73efb78136cd00a:0.500:libx264 crf23 720p noaudio"
+ },
+ "text": "{\n  \"answer\": \"left of the center pillar\",\n  \"t_start\": 0.0,\n  \"t_end\": 0.5,\n  \"stale\": false,\n  \"reason\": \"The man in the gray hoodie is standing directly to the left of the prominent white pillar in the center of the frame.\"\n}",
+ "usage": {
+  "candidatesTokenCount": 77,
+  "promptTokenCount": 282,
+  "promptTokensDetails": [
+   {
+    "modality": "TEXT",
+    "tokenCount": 216
+   },
+   {
+    "modality": "VIDEO",
+    "tokenCount": 66
+   }
+  ],
+  "serviceTier": "standard",
+  "thoughtsTokenCount": 429,
+  "totalTokenCount": 788
+ }
+}

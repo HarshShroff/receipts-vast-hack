@@ -4,3 +4,4 @@ __pycache__/
 *.pt
 .env
 .env
+eval/out/gemini_cuts/

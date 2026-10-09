@@ -138,6 +138,7 @@ def score_one(system, store, questions):
             "answer": r.get("answer"),
             "exact": ok,
             "cited_time_s": r.get("cited_time_s"),
+            "cited_interval": list(got) if got else None,
             "cited_in_interval": inside,
             "time_restricted": r.get("time_restricted"),
             "model_id": r.get("model_id"),
@@ -155,6 +156,16 @@ def score_one(system, store, questions):
         "after_footage_correct_stale": after_ok,
     }
     return summary, rows
+
+
+class _OneRepeat:
+    """Scores a single repeat of a repeated system (for min-max across runs)."""
+
+    def __init__(self, system, k):
+        self.system, self.k, self.name = system, k, f"{system.name} run {k}"
+
+    def answer(self, store, question, key, as_of):
+        return self.system.answer(store, question, key, as_of, repeat=self.k)
 
 
 def bar_chart(summaries, path):
@@ -215,6 +226,11 @@ def main(argv=None):
     p.add_argument("--cosmos", default=os.path.join(HERE, "out", "person_moving_cosmos.txt"))
     p.add_argument("--out", default=os.path.join(HERE, "out"))
     p.add_argument("--live", action="store_true", help="call team VSS agent-qa and W&B inference")
+    p.add_argument("--gemini", action="store_true",
+                   help="add Gemini Flash watching the clip cut at as_of (cached in eval/out/gemini_cache)")
+    p.add_argument("--gemini-model", default=None, help="default: newest stable gemini-*-flash")
+    p.add_argument("--gemini-offline", action="store_true", help="use only cached Gemini answers")
+    p.add_argument("--repeats", type=int, default=3, help="Gemini calls per question (majority reported)")
     args = p.parse_args(argv)
 
     questions = json.load(open(args.questions))["questions"]
@@ -244,6 +260,20 @@ def main(argv=None):
     else:
         notes.append("VSS agent-qa and LLM-over-captions were not called (--live not set)")
 
+    gemini = None
+    if args.gemini:
+        from baselines_gemini import GeminiFullContext, answer_options
+        from gemini_client import GeminiVideoQA
+        clip = os.path.join(os.path.dirname(HERE), "clips", "person_moving.mp4")
+        qa = GeminiVideoQA(model=args.gemini_model, offline=args.gemini_offline)
+        if args.gemini_offline and qa._model is None:
+            raise SystemExit("--gemini-offline needs --gemini-model (no API call to resolve it)")
+        gemini = GeminiFullContext(clip, CLIP_START, answer_options(questions), qa=qa, repeats=args.repeats)
+        systems.append(gemini)
+        notes.append(f"Gemini Flash ({qa.model_id}) watches clips/person_moving.mp4 cut at as_of (720p, 2 fps sampling, "
+                     f"temperature 0), answers from the label vocabulary or 'unknown', majority of {args.repeats} runs; "
+                     "prompt in baselines_gemini.PROMPT_FULL")
+
     summaries = {}
     per_q = {}
     for system in systems:
@@ -255,6 +285,30 @@ def main(argv=None):
             mid = getattr(system.llm, "model_id", None) or system.model_id
             summary["model_id"] = mid
             name = f"{system.name} ({mid})" if mid else system.name
+        if system is gemini:
+            from baselines_gemini import MissingRepeat
+            per_run = []
+            for k in range(system.repeats):
+                try:
+                    per_run.append(score_one(_OneRepeat(system, k), store, questions)[0])
+                except MissingRepeat:
+                    pass  # incomplete run: left out of min-max, reported below
+            summary.update(model_id=system.qa.model_id, repeats=system.repeats,
+                           complete_runs=len(per_run),
+                           exact_runs=[s["exact"] for s in per_run],
+                           after_footage_runs=[s["after_footage_correct_stale"] for s in per_run])
+            by_id = {q["id"]: q for q in questions}
+            missing = []
+            for row in rows:
+                r = system.answer(store, by_id[row["id"]]["question"], None, by_id[row["id"]]["as_of"])
+                row.update(agreement=r["agreement"], repeats=r["repeats"], runs_missing=r["runs_missing"],
+                           t_start=r["t_start"], t_end=r["t_end"])
+                if r["runs_missing"]:
+                    missing.append(f"{row['id']} ({r['runs_missing']} missing)")
+            if missing:
+                summary["runs_missing"] = missing
+                notes.append("Gemini runs not completed (free-tier quota), majority taken over the runs that exist: "
+                             + ", ".join(missing))
         summaries[name] = summary
         per_q[name] = rows
 

@@ -1,0 +1,72 @@
+{
+ "created": "2026-10-09T14:53:26-0400",
+ "model_version": "gemini-3.8-flash",
+ "request": {
+  "fps": 2,
+  "model": "gemini-3.8-flash",
+  "prompt": "You are answering a question about security-camera footage.\n\nCamera clock: the video starts at 12:03:00. The video you are given covers 12:03:00 to 12:03:06.5.\nThe question is asked at 12:03:06.5.\n\nQuestion: Where in the frame is the man in the gray hoodie?\n\nChoose exactly one answer from this list: \"left of the center pillar\", \"right of the center pillar\", \"behind the center pillar\", \"unknown\". Answer \"unknown\" if the footage does not show it.\nCite the moment your answer is based on as t_start and t_end, in seconds from the start of the video.\nStaleness rule: set stale to true if your answer relies on footage that ends before the question time,\nor on evidence more than 900 seconds older than the question time. Otherwise set stale to false.\nGive a one-sentence reason.",
+  "repeat": 1,
+  "schema": {
+   "properties": {
+    "answer": {
+     "enum": [
+      "left of the center pillar",
+      "right of the center pillar",
+      "behind the center pillar",
+      "unknown"
+     ],
+     "type": "STRING"
+    },
+    "reason": {
+     "type": "STRING"
+    },
+    "stale": {
+     "type": "BOOLEAN"
+    },
+    "t_end": {
+     "nullable": true,
+     "type": "NUMBER"
+    },
+    "t_start": {
+     "nullable": true,
+     "type": "NUMBER"
+    }
+   },
+   "propertyOrdering": [
+    "answer",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "required": [
+    "answer",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "type": "OBJECT"
+  },
+  "temperature": 0.0,
+  "video": "40b8ffbbdf8e9dd8f8e1d85e6f51ca81a10f0c62179f310bd73efb78136cd00a:6.500:libx264 crf23 720p noaudio"
+ },
+ "text": "{\n  \"answer\": \"behind the center pillar\",\n  \"t_start\": 5.5,\n  \"t_end\": 6.0,\n  \"stale\": false,\n  \"reason\": \"The man in the gray hoodie steps out of view behind the large white center pillar around 00:05.5 and remains behind it at the end of the video.\"\n}",
+ "usage": {
+  "candidatesTokenCount": 88,
+  "promptTokenCount": 1074,
+  "promptTokensDetails": [
+   {
+    "modality": "VIDEO",
+    "tokenCount": 858
+   },
+   {
+    "modality": "TEXT",
+    "tokenCount": 216
+   }
+  ],
+  "serviceTier": "standard",
+  "thoughtsTokenCount": 1453,
+  "totalTokenCount": 2615
+ }
+}

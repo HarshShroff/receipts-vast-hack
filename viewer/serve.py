@@ -119,10 +119,31 @@ def api_questions():
     return {"questions": questions, "clip_clock": clock, "label": data.get("_label", "")}
 
 
+RESULTS_PATH = os.environ.get("RESULTS_PATH", os.path.join(ROOT, "eval", "out", "results_real.json"))
+
+
 def _allow_local_clip(cid):
     """Every clip in the folder. Skip the audio-stripped duplicate of person_moving."""
     c = (cid or "").lower()
     return bool(c) and not c.endswith("_noaudio")
+
+
+def api_compare():
+    """Model comparison: labeled questions + the committed eval results (eval/compare.py output).
+    Read-only; never calls a model."""
+    qs = api_questions()
+    res = {}
+    if os.path.isfile(RESULTS_PATH):
+        with open(RESULTS_PATH, encoding="utf-8") as f:
+            res = json.load(f)
+    clock = qs.get("clip_clock") or {}
+    clip_id = next(iter(clock), "person_moving")
+    path = clip_paths().get(clip_id)
+    return {"questions": qs["questions"], "label": qs.get("label", ""),
+            "clip_id": clip_id, "clip_url": ("clips/" + os.path.basename(path)) if path else None,
+            "clip_start": parse_t(clock[clip_id]) if clip_id in clock else 0.0,
+            "summaries": res.get("summaries", {}), "per_question": res.get("per_question", {}),
+            "notes": res.get("notes", []), "results_file": os.path.relpath(RESULTS_PATH, ROOT)}
 
 
 def api_clips():
@@ -383,6 +404,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path in ("/", "/index.html"):
                 return self._static("index.html", head)
+            if path in ("/compare", "/compare.html"):
+                return self._static("compare.html", head)
+            if path == "/api/compare":
+                return self._json(200, api_compare(), head)
             if path.startswith("/static/"):
                 return self._static(path[len("/static/"):], head)
             if path.startswith("/clips/"):

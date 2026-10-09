@@ -3,7 +3,9 @@
   "notes": [
     "store: eye-checked intervals in rv_eval.db",
     "claims are the eye-checked position intervals, so Receipts is scored on those labels",
-    "VSS agent-qa and LLM-over-captions were not called (--live not set)"
+    "VSS agent-qa and LLM-over-captions were not called (--live not set)",
+    "Gemini Flash (gemini-3.8-flash) watches clips/person_moving.mp4 cut at as_of (720p, 2 fps sampling, temperature 0), answers from the label vocabulary or 'unknown', majority of 3 runs; prompt in baselines_gemini.PROMPT_FULL",
+    "Gemini runs not completed (free-tier quota), majority taken over the runs that exist: r06 (1 missing)"
   ],
   "summaries": {
     "Receipts (supersession)": {
@@ -55,6 +57,30 @@
       "stale_flag_ok": 5,
       "after_footage_n": 1,
       "after_footage_correct_stale": 0
+    },
+    "Gemini Flash, full video to as_of (gemini-3.8-flash)": {
+      "n": 6,
+      "exact": 6,
+      "cited_in_interval": 4,
+      "answered": 6,
+      "stale_claim": 0,
+      "stale_flag_ok": 6,
+      "after_footage_n": 1,
+      "after_footage_correct_stale": 1,
+      "model_id": "gemini-3.8-flash",
+      "repeats": 3,
+      "complete_runs": 2,
+      "exact_runs": [
+        6,
+        6
+      ],
+      "after_footage_runs": [
+        1,
+        1
+      ],
+      "runs_missing": [
+        "r06 (1 missing)"
+      ]
     }
   },
   "per_question": {
@@ -65,6 +91,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -77,6 +107,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43382.5,
+          43383.2
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -89,6 +123,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43384.5,
+          43386.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -101,6 +139,10 @@
         "answer": "behind the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43386.0,
+          43387.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -113,6 +155,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -125,6 +171,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -139,6 +189,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -151,6 +205,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43382.5,
+          43383.2
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -163,6 +221,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43384.5,
+          43386.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -175,6 +237,10 @@
         "answer": "behind the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43386.0,
+          43387.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -187,6 +253,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -199,6 +269,10 @@
         "answer": "right of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -213,6 +287,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -225,6 +303,10 @@
         "answer": "left of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -237,6 +319,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -249,6 +335,10 @@
         "answer": "left of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -261,6 +351,10 @@
         "answer": "left of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -273,6 +367,10 @@
         "answer": "left of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -287,6 +385,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -299,6 +401,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43382.5,
+          43383.2
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -311,6 +417,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43384.5,
+          43386.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -323,6 +433,10 @@
         "answer": "behind the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43386.0,
+          43387.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -335,6 +449,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -347,6 +465,10 @@
         "answer": "right of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
@@ -361,6 +483,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43380.0,
+          43381.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -373,6 +499,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43382.5,
+          43383.2
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -385,6 +515,10 @@
         "answer": "left of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43384.5,
+          43386.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -397,6 +531,10 @@
         "answer": "behind the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43386.0,
+          43387.0
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -409,6 +547,10 @@
         "answer": "right of the center pillar",
         "exact": true,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": true,
         "time_restricted": null,
         "model_id": null,
@@ -421,11 +563,268 @@
         "answer": "right of the center pillar",
         "exact": false,
         "cited_time_s": null,
+        "cited_interval": [
+          43387.0,
+          43388.6
+        ],
         "cited_in_interval": false,
         "time_restricted": null,
         "model_id": null,
         "note": null,
         "stale": false
+      }
+    ],
+    "Gemini Flash, full video to as_of (gemini-3.8-flash)": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": 43380.5,
+        "cited_interval": [
+          43380.0,
+          43380.5
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The man wearing the gray hoodie and jeans is standing directly to the left of the center pillar.",
+        "stale": false,
+        "agreement": "3/3",
+        "repeats": [
+          {
+            "answer": "left of the center pillar",
+            "stale": false,
+            "t_start": 43380.0,
+            "t_end": 43380.5,
+            "reason": "The man wearing the gray hoodie and jeans is standing directly to the left of the center pillar."
+          },
+          {
+            "answer": "left of the center pillar",
+            "stale": false,
+            "t_start": 43380.0,
+            "t_end": 43380.5,
+            "reason": "The man wearing the gray hoodie is standing directly to the left of the prominent center pillar throughout the video clip."
+          },
+          {
+            "answer": "left of the center pillar",
+            "stale": false,
+            "t_start": 43380.0,
+            "t_end": 43380.5,
+            "reason": "The man in the gray hoodie is standing directly to the left of the prominent white pillar in the center of the frame."
+          }
+        ],
+        "runs_missing": 0,
+        "t_start": 43380.0,
+        "t_end": 43380.5
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": 43383.0,
+        "cited_interval": [
+          43382.5,
+          43383.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "At the end of the video, the man in the gray hoodie emerges and stands to the right of the center pillar.",
+        "stale": false,
+        "agreement": "3/3",
+        "repeats": [
+          {
+            "answer": "right of the center pillar",
+            "stale": false,
+            "t_start": 43382.5,
+            "t_end": 43383.0,
+            "reason": "At the end of the video, the man in the gray hoodie emerges and stands to the right of the center pillar."
+          },
+          {
+            "answer": "right of the center pillar",
+            "stale": false,
+            "t_start": 43382.0,
+            "t_end": 43382.5,
+            "reason": "The man in the gray hoodie walks behind the center pillar and emerges on its right side by the end of the footage."
+          },
+          {
+            "answer": "right of the center pillar",
+            "stale": false,
+            "t_start": 43382.0,
+            "t_end": 43383.0,
+            "reason": "The man in the gray hoodie walks behind the center pillar and emerges standing to its right."
+          }
+        ],
+        "runs_missing": 0,
+        "t_start": 43382.5,
+        "t_end": 43383.0
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": 43385.5,
+        "cited_interval": [
+          43384.5,
+          43385.5
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "At the end of the footage, the man in the gray hoodie is standing to the left of the large center pillar.",
+        "stale": false,
+        "agreement": "3/3",
+        "repeats": [
+          {
+            "answer": "left of the center pillar",
+            "stale": false,
+            "t_start": 43384.5,
+            "t_end": 43385.5,
+            "reason": "At the end of the footage, the man in the gray hoodie is standing to the left of the large center pillar."
+          },
+          {
+            "answer": "left of the center pillar",
+            "stale": false,
+            "t_start": 43384.5,
+            "t_end": 43385.5,
+            "reason": "At the end of the footage, the man in the gray hoodie has moved back and is standing to the left of the center pillar."
+          },
+          {
+            "answer": "left of the center pillar",
+            "stale": false,
+            "t_start": 43384.5,
+            "t_end": 43385.5,
+            "reason": "At the end of the video, the man in the gray hoodie is standing to the left of the center pillar."
+          }
+        ],
+        "runs_missing": 0,
+        "t_start": 43384.5,
+        "t_end": 43385.5
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": "behind the center pillar",
+        "exact": true,
+        "cited_time_s": 43386.5,
+        "cited_interval": [
+          43385.5,
+          43386.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "At the end of the clip, the man in the gray hoodie steps behind the large center pillar and remains obscured.",
+        "stale": false,
+        "agreement": "3/3",
+        "repeats": [
+          {
+            "answer": "behind the center pillar",
+            "stale": false,
+            "t_start": 43385.5,
+            "t_end": 43386.5,
+            "reason": "At the end of the clip, the man in the gray hoodie steps behind the large center pillar and remains obscured."
+          },
+          {
+            "answer": "behind the center pillar",
+            "stale": false,
+            "t_start": 43385.5,
+            "t_end": 43386.0,
+            "reason": "The man in the gray hoodie steps out of view behind the large white center pillar around 00:05.5 and remains behind it at the end of the video."
+          },
+          {
+            "answer": "behind the center pillar",
+            "stale": false,
+            "t_start": 43385.5,
+            "t_end": 43386.0,
+            "reason": "The man in the gray hoodie steps out of view behind the large center pillar by 00:06.000."
+          }
+        ],
+        "runs_missing": 0,
+        "t_start": 43385.5,
+        "t_end": 43386.5
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": 43388.0,
+        "cited_interval": [
+          43387.0,
+          43388.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "At the end of the video, the man in the gray hoodie is standing directly to the right of the center pillar.",
+        "stale": false,
+        "agreement": "3/3",
+        "repeats": [
+          {
+            "answer": "right of the center pillar",
+            "stale": false,
+            "t_start": 43387.0,
+            "t_end": 43388.0,
+            "reason": "At the end of the video, the man in the gray hoodie is standing directly to the right of the center pillar."
+          },
+          {
+            "answer": "right of the center pillar",
+            "stale": false,
+            "t_start": 43387.0,
+            "t_end": 43388.0,
+            "reason": "At the end of the video, the man in the gray hoodie is standing to the right of the large center pillar."
+          },
+          {
+            "answer": "right of the center pillar",
+            "stale": false,
+            "t_start": 43387.0,
+            "t_end": 43387.5,
+            "reason": "At the end of the video, the man in the gray hoodie is standing to the right of the center pillar."
+          }
+        ],
+        "runs_missing": 0,
+        "t_start": 43387.0,
+        "t_end": 43388.0
+      },
+      {
+        "id": "r06",
+        "expected": null,
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": 43388.0,
+        "cited_interval": [
+          43387.0,
+          43388.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The man in the gray hoodie is seen standing to the right of the center pillar towards the end of the footage.",
+        "stale": true,
+        "agreement": "2/2",
+        "repeats": [
+          {
+            "answer": "right of the center pillar",
+            "stale": true,
+            "t_start": 43387.0,
+            "t_end": 43388.0,
+            "reason": "The man in the gray hoodie is seen standing to the right of the center pillar towards the end of the footage."
+          },
+          {
+            "answer": "right of the center pillar",
+            "stale": true,
+            "t_start": 43387.0,
+            "t_end": 43388.633,
+            "reason": "The man in the gray hoodie is standing to the right of the center pillar at the end of the clip, prior to the question time."
+          }
+        ],
+        "runs_missing": 1,
+        "t_start": 43387.0,
+        "t_end": 43388.0
       }
     ]
   }

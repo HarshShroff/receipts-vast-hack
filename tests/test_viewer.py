@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import unittest.mock
 import urllib.error
 import urllib.request
 
@@ -335,6 +336,37 @@ class ServeHandlers(unittest.TestCase):
         self.assertEqual(self.get("/api/answer?entity=x")[0], 400)
         _, _, body = self.get("/api/keys")
         self.assertIn({"entity": "underpass", "attribute": "state", "location": "bridge", "n": 3}, json.loads(body))
+
+
+class CompareApi(unittest.TestCase):
+    """/api/compare merges the labeled questions with committed eval results; no model calls."""
+
+    def test_merge(self):
+        d = tempfile.mkdtemp()
+        try:
+            res = {"notes": ["n1"], "summaries": {"Receipts (supersession)": {"n": 6, "exact": 6}},
+                   "per_question": {"Receipts (supersession)": [{"id": "r01", "answer": "left", "exact": True,
+                                                                 "cited_interval": [43380.0, 43381.0]}]}}
+            p = os.path.join(d, "results.json")
+            with open(p, "w") as f:
+                json.dump(res, f)
+            with unittest.mock.patch.object(sv, "RESULTS_PATH", p):
+                out = sv.api_compare()
+            self.assertEqual(out["clip_id"], "person_moving")
+            self.assertEqual(out["clip_start"], 12 * 3600 + 3 * 60)
+            self.assertEqual(out["clip_url"], "clips/person_moving.mp4")
+            self.assertEqual(len(out["questions"]), 6)
+            self.assertEqual(out["summaries"], res["summaries"])
+            self.assertEqual(out["per_question"]["Receipts (supersession)"][0]["cited_interval"], [43380.0, 43381.0])
+            with unittest.mock.patch.object(sv, "RESULTS_PATH", os.path.join(d, "missing.json")):
+                self.assertEqual(sv.api_compare()["summaries"], {})
+        finally:
+            shutil.rmtree(d)
+
+    def test_every_clip_but_noaudio_duplicate(self):
+        self.assertTrue(sv._allow_local_clip("bridge_01_road_clear"))
+        self.assertTrue(sv._allow_local_clip("person_moving"))
+        self.assertFalse(sv._allow_local_clip("person_moving_noaudio"))
 
 
 if __name__ == "__main__":
