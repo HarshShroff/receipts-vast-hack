@@ -1,6 +1,15 @@
 # Receipts
 
-A video agent that never answers without a clip, and never answers from a clip that has since been overtaken.
+**Video answers that know when they're out of date.** Every answer cites the exact clip and timestamps it came from. When newer footage contradicts it, the answer changes and shows both clips. When the footage stops, it says so instead of guessing.
+
+- **Live app:** https://team-5-app.thecosmoslabs.com/app/ (press **Run demo**)
+- **Demo video:** _link added at submission_
+- **Eval run (W&B):** https://wandb.ai/harshrofff-na/receipts-vast-hack/runs/kvzklxkd
+- **Team:** Harsh Shroff, Yuri Shlyakhter, Zain
+
+Built at the Real-Time Video Agents Hack NYC (VAST Builders Challenge), 2026-10-09.
+
+![Eval on our own venue footage](eval/out/results_real.png)
 
 ## The problem
 
@@ -42,7 +51,7 @@ What this build actually called:
 - **Cursor** — agent + skills for health, retrieval, re-ingest, and deploy-app-no-registry
 - **Weights & Biases** — eval results table and chart logged per run (`eval/compare.py`); example: [run kvzklxkd](https://wandb.ai/harshrofff-na/receipts-vast-hack/runs/kvzklxkd)
 
-Not used in this path: YOLO detections, W&B inference, or Weave tracing.
+YOLO11 (ByteTrack) runs in the local clip viewer (`viewer/`) on our own clips, not in the VAST app path. Not used: W&B inference, Weave tracing.
 
 ## Evaluation, with caveats
 
@@ -51,7 +60,9 @@ Metrics: exact match; Acc@GQA (exact answer AND correct clip AND interval IoU >=
 | set | questions | Receipts exact | Receipts stale-claim rate | best baseline exact | best baseline stale-claim rate |
 |---|---|---|---|---|---|
 | synthetic | 25 | 25/25 | 0/23 | 15/25 (RAG-all) | 9/24 |
-| real clips | [__] | [__] | [__] | [__] | [__] |
+| own venue clip, hand-labeled | 6 (1 after footage ends) | 6/6 | 0/6 | 5/6 (latest-clip, newest-wins retrieval, last-2 window) | 0/6, but 0/1 flagged the after-footage question as stale |
+
+The venue row uses `clips/person_moving.mp4`, filmed at the event: 6 questions about where one person is relative to a pillar, positions labeled by eye at 2 fps (not by Cosmos or YOLO). All systems get the same claims (the labels), so this row isolates time handling, not caption extraction. Retrieve-everything with oldest-wins ties scored 2/6 and answered 5/6 from an outdated position. Asked 6 s after the clip ended, all four baselines answered with confidence; Receipts flagged the answer stale. The team VSS agent-qa and an LLM-over-captions baseline were wired (`baselines_vss.py`) but did not return answers in our runs, so they are not scored. Reproduce: `python3 eval/compare.py --db /tmp/eval.db`.
 
 Read the synthetic row carefully. The labels were written against the same scenario the rule engine runs on, so 25/25 shows the plumbing works, not that the approach generalises. The informative part is how the baselines fail: retrieval-style memory returns the old state when both states are in the index. Real numbers need real labeled clips, and the real-clip row is the only one that should be used to judge the idea. Counts only, small n, no significance claims.
 
