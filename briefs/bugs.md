@@ -4,3 +4,5 @@
 2. Status badge shows "STALE · rule SUPERSEDE_NEWER_CONTRADICTS" on an ACTIVE answer. Show the claim's status (ACTIVE / SUPERSEDED) and the stale flag separately; show the rule that created the current claim, not an unrelated one.
 3. Cited clip video never loads (spinner forever). Serve the segment via a working URL (presigned S3 or proxied through the app) or fall back to a thumbnail frame + the S3 path. Never leave a dead player in the demo.
 4. Default view should open on a moment where a supersede is visible (e.g. forklift on cam-2 moving -> parked), not an empty form.
+
+5. VIDEO FIRST (top priority after the player fix). The first thing on the page is a large video player showing the actual footage (cam-2 segment in view), playing, with the claim tiles beside/below it. In Live mode the player advances to each segment as it streams, and the tile that changed flashes in sync. When an answer is shown, the player jumps to the cited segment and highlights its time range. If S3 video can't be served in time, show a strip of 4-6 real frames from the segment (extracted with ffmpeg, cached) instead. No dead players.
