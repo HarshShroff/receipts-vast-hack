@@ -1,0 +1,78 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "Receipts eval question file",
+ "type": "object",
+ "required": [
+  "questions"
+ ],
+ "properties": {
+  "questions": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "question",
+     "question_key",
+     "as_of",
+     "expected_answer",
+     "expected_clip_id",
+     "expected_interval"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "question": {
+      "type": "string"
+     },
+     "question_key": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "[entity, attribute, location]; used by Receipts only"
+     },
+     "as_of": {
+      "type": "string",
+      "description": "HH:MM[:SS]; the agent may only use footage observed up to this time"
+     },
+     "expected_answer": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "null = footage never showed it; correct behaviour is no answer"
+     },
+     "expected_clip_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "expected_interval": {
+      "type": [
+       "array",
+       "null"
+      ],
+      "items": {
+       "type": "string"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[t_start, t_end] of the footage that proves the answer"
+     },
+     "expected_stale": {
+      "type": "boolean",
+      "description": "should Receipts flag this answer STALE (default max_age 15 min)"
+     },
+     "category": {
+      "type": "string"
+     }
+    }
+   }
+  }
+ }
+}

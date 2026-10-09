@@ -1,0 +1,449 @@
+{
+ "_label": "SYNTHETIC ground truth for fixtures/demo_scenario.py. Replace with labels for your own footage on hackathon day.",
+ "questions": [
+  {
+   "id": "q01",
+   "question": "Is the north exit blocked?",
+   "question_key": [
+    "exit",
+    "state",
+    "north_exit"
+   ],
+   "as_of": "10:20",
+   "expected_answer": "blocked",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:12",
+    "10:15"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q02",
+   "question": "Where is the pallet?",
+   "question_key": [
+    "pallet_7",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "10:20",
+   "expected_answer": "at_north_exit",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:12",
+    "10:15"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q03",
+   "question": "Where is the forklift?",
+   "question_key": [
+    "forklift_2",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "10:20",
+   "expected_answer": "bay_2",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:12",
+    "10:14"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q04",
+   "question": "Is the loading door open or closed?",
+   "question_key": [
+    "door_3",
+    "state",
+    "loading_dock"
+   ],
+   "as_of": "10:20",
+   "expected_answer": "closed",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:13",
+    "10:14"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q05",
+   "question": "Is the south exit clear?",
+   "question_key": [
+    "exit",
+    "state",
+    "south_exit"
+   ],
+   "as_of": "10:20",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:14",
+    "10:16"
+   ],
+   "expected_stale": false,
+   "category": "other"
+  },
+  {
+   "id": "q06",
+   "question": "Is the north exit blocked?",
+   "question_key": [
+    "exit",
+    "state",
+    "north_exit"
+   ],
+   "as_of": "10:50",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q07",
+   "question": "Where is the pallet now?",
+   "question_key": [
+    "pallet_7",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "10:50",
+   "expected_answer": "bay_4",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q08",
+   "question": "Where is the forklift?",
+   "question_key": [
+    "forklift_2",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "10:50",
+   "expected_answer": "bay_2",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:43",
+    "10:44"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q09",
+   "question": "Is the loading door open or closed?",
+   "question_key": [
+    "door_3",
+    "state",
+    "loading_dock"
+   ],
+   "as_of": "10:50",
+   "expected_answer": "closed",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:43",
+    "10:44"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q10",
+   "question": "Is the south exit clear?",
+   "question_key": [
+    "exit",
+    "state",
+    "south_exit"
+   ],
+   "as_of": "10:50",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:14",
+    "10:16"
+   ],
+   "expected_stale": true,
+   "category": "other"
+  },
+  {
+   "id": "q11",
+   "question": "Is the north exit blocked?",
+   "question_key": [
+    "exit",
+    "state",
+    "north_exit"
+   ],
+   "as_of": "11:10",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q12",
+   "question": "Where is the pallet now?",
+   "question_key": [
+    "pallet_7",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "11:10",
+   "expected_answer": "bay_4",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q13",
+   "question": "Where is the forklift?",
+   "question_key": [
+    "forklift_2",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "11:10",
+   "expected_answer": "bay_3",
+   "expected_clip_id": "clip_C",
+   "expected_interval": [
+    "11:05",
+    "11:07"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q14",
+   "question": "Is the loading door open or closed?",
+   "question_key": [
+    "door_3",
+    "state",
+    "loading_dock"
+   ],
+   "as_of": "11:10",
+   "expected_answer": "open",
+   "expected_clip_id": "clip_C",
+   "expected_interval": [
+    "11:06",
+    "11:08"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q15",
+   "question": "Is the south exit clear?",
+   "question_key": [
+    "exit",
+    "state",
+    "south_exit"
+   ],
+   "as_of": "11:10",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:14",
+    "10:16"
+   ],
+   "expected_stale": true,
+   "category": "other"
+  },
+  {
+   "id": "q16",
+   "question": "Is the north exit blocked?",
+   "question_key": [
+    "exit",
+    "state",
+    "north_exit"
+   ],
+   "as_of": "10:30",
+   "expected_answer": "blocked",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:12",
+    "10:15"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q17",
+   "question": "Where is the pallet?",
+   "question_key": [
+    "pallet_7",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "10:30",
+   "expected_answer": "at_north_exit",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:12",
+    "10:15"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q18",
+   "question": "Is the loading door open or closed?",
+   "question_key": [
+    "door_3",
+    "state",
+    "loading_dock"
+   ],
+   "as_of": "10:30",
+   "expected_answer": "closed",
+   "expected_clip_id": "clip_A",
+   "expected_interval": [
+    "10:13",
+    "10:14"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q19",
+   "question": "Is the exit still blocked?",
+   "question_key": [
+    "exit",
+    "state",
+    "north_exit"
+   ],
+   "as_of": "10:46",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q20",
+   "question": "Where is the pallet now?",
+   "question_key": [
+    "pallet_7",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "10:46",
+   "expected_answer": "bay_4",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": false,
+   "category": "other"
+  },
+  {
+   "id": "q21",
+   "question": "Where is the forklift?",
+   "question_key": [
+    "forklift_2",
+    "position",
+    "warehouse"
+   ],
+   "as_of": "11:00",
+   "expected_answer": "bay_2",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:43",
+    "10:44"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q22",
+   "question": "Is the loading door open or closed?",
+   "question_key": [
+    "door_3",
+    "state",
+    "loading_dock"
+   ],
+   "as_of": "11:00",
+   "expected_answer": "closed",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:43",
+    "10:44"
+   ],
+   "expected_stale": true,
+   "category": "state-now"
+  },
+  {
+   "id": "q23",
+   "question": "Is the east exit blocked?",
+   "question_key": [
+    "exit",
+    "state",
+    "east_exit"
+   ],
+   "as_of": "10:20",
+   "expected_answer": null,
+   "expected_clip_id": null,
+   "expected_interval": null,
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q24",
+   "question": "Is the loading door open or closed?",
+   "question_key": [
+    "door_3",
+    "state",
+    "loading_dock"
+   ],
+   "as_of": "10:05",
+   "expected_answer": null,
+   "expected_clip_id": null,
+   "expected_interval": null,
+   "expected_stale": false,
+   "category": "state-now"
+  },
+  {
+   "id": "q25",
+   "question": "Can people get out the north exit?",
+   "question_key": [
+    "exit",
+    "state",
+    "north_exit"
+   ],
+   "as_of": "10:50",
+   "expected_answer": "clear",
+   "expected_clip_id": "clip_B",
+   "expected_interval": [
+    "10:42",
+    "10:45"
+   ],
+   "expected_stale": false,
+   "category": "other"
+  }
+ ]
+}
