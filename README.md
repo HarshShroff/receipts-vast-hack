@@ -20,6 +20,27 @@ The core is deterministic Python 3 and sqlite3, no model calls. The model only s
     python3 fixtures/demo_scenario.py        # synthetic: ask, ingest newer clip, ask again, see SUPERSEDED + new clip
     python3 eval/score.py                    # 25-question table, Receipts vs 3 baselines
     python3 -m unittest discover -s tests -v
+    python3 run_vss.py                       # Pack C warehouse segments → receipts.db (needs VSS env)
+
+## Running on VAST
+
+Pack C warehouse safety demo (`sdg_warehouse_cam-2` / `warehouse3`):
+
+1. Env comes from `/config/<team>.config` (`INGRESS_URL`, `USERNAME`, `PASSWORD`, S3/VastDB names). Do not commit secrets.
+2. `python3 run_vss.py` logs into the team VSS, pulls explore timelines, maps Cosmos captions → claims, writes `receipts.db`, prints rule results (including `SUPERSEDE_NEWER_CONTRADICTS`).
+3. Web UI is deployed on the team cluster (ConfigMap + `python:3.12-slim`, Ingress path `/app`). Open [https://workshop.thecosmoslabs.com](https://workshop.thecosmoslabs.com) and click **App**.
+4. Re-ingest of two motion chunks was started with an obstruction prompt; while those captions were still pending index, the adapter uses keyword mapping on existing captions and automatically prefers `BLOCKED`/`CLEAR` + zone names when re-ingest lands.
+
+## Sponsor tools
+
+What this build actually called:
+
+- **VAST** — DataEngine / VSS retrieval API (login, explore, search, stream), VastDB-backed index, S3 chunk/segment buckets
+- **NVIDIA Cosmos Reason** — segment captions (`reasoning_content`); **Cosmos Embed** — via hybrid search during discovery
+- **CoreWeave** — GPUs serving the reasoner/embedder (and detector) in the team pipeline
+- **Cursor** — agent + skills for health, retrieval, re-ingest, and deploy-app-no-registry
+
+Not used in this path: YOLO detections, W&B inference.
 
 ## Evaluation, with caveats
 
@@ -34,11 +55,11 @@ Read the synthetic row carefully. The labels were written against the same scena
 
 ## Limitations
 
-Exact-name entity matching (no entity resolution). Keyword-overlap retrieval in the baselines. Timestamps come from the model and are only roughly accurate. The staleness window (`max_age`) is a per-scene setting. No UI.
+Exact-name entity matching (no entity resolution). Keyword-overlap retrieval in the baselines. Timestamps come from the model and are only roughly accurate. The staleness window (`max_age`) is a per-scene setting. Warehouse claims from stock captions use deterministic keyword mapping until re-ingest obstruction captions finish indexing.
 
 ## Stack
 
-NVIDIA Cosmos Reason / VSS for clip understanding, [YOLO if used], Python 3 + SQLite, built with Cursor. [W&B / CoreWeave only if actually used.]
+NVIDIA Cosmos Reason + Embed / VAST VSS, CoreWeave GPUs, Python 3 + SQLite, Cursor.
 
 License: none yet (all rights reserved by default).
 
