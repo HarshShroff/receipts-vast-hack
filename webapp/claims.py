@@ -44,7 +44,11 @@ def parse_t(x):
     """'10:42' / '10:42:30' / number -> float seconds."""
     if isinstance(x, (int, float)):
         return float(x)
-    parts = [float(p) for p in str(x).split(":")]
+    s = str(x).strip()
+    # Bare numerics are already seconds (query strings, JSON); only colon forms are clock times.
+    if re.fullmatch(r"[+-]?\d+(?:\.\d+)?", s):
+        return float(s)
+    parts = [float(p) for p in s.split(":")]
     while len(parts) < 3:
         parts.append(0.0)
     return parts[0] * 3600 + parts[1] * 60 + parts[2]
@@ -68,7 +72,8 @@ def parse_key(key):
 
 class Store:
     def __init__(self, path=":memory:"):
-        self.db = sqlite3.connect(path)
+        # ThreadingHTTPServer + SSE/poller share one connection.
+        self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
 

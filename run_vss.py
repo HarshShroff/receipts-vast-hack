@@ -29,6 +29,8 @@ def main(argv=None):
                    help="offline: path to explore JSON (skip network)")
     p.add_argument("--demo-key", default="forklift|state|sdg_warehouse_cam-2",
                    help="question key to answer after ingest")
+    p.add_argument("--pace", type=float, default=0.0,
+                   help="seconds between segments (demo: paced ingest like Live replay)")
     args = p.parse_args(argv)
 
     if args.explore_json:
@@ -49,6 +51,9 @@ def main(argv=None):
 
     counts = {}
     for seg in segments:
+        seg = dict(seg)
+        if not seg.get("description"):
+            seg["description"] = seg.get("caption") or ""
         results = ingest_clip(store, seg, source, model_name="cosmos_reason_vss")
         for r in results:
             counts[r["rule_id"]] = counts.get(r["rule_id"], 0) + 1
@@ -59,6 +64,9 @@ def main(argv=None):
                                    (r["claim_id"],)).fetchone()
             if row:
                 print(f"    -> {row['entity']}/{row['attribute']}@{row['location']} = {row['value']!r} [{row['status']}]")
+        if args.pace > 0:
+            import time
+            time.sleep(args.pace)
 
     print("\n=== rule counts ===")
     for k, v in sorted(counts.items()):
