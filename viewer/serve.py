@@ -20,12 +20,16 @@ sys.path.insert(0, ROOT)
 
 from answer import answer  # noqa: E402
 from claims import Store, norm, parse_t  # noqa: E402
-from viewer.ingest_clips import DEFAULT_CLIPS, DEFAULT_DB, discover_clips, scene_for  # noqa: E402
+from viewer.ingest_clips import DEFAULT_CLIPS, DEFAULT_DB, build_store, discover_clips, scene_for  # noqa: E402
 from viewer.sidecar import CREATING_RULES, clip_id_for, load_sidecar, sidecar_path, track_zone_intervals  # noqa: E402
 
 PORT = int(os.environ.get("PORT", "8765"))
 CLIPS_DIR = os.environ.get("VIEWER_CLIPS", DEFAULT_CLIPS)
-DB_PATH = os.environ.get("RECEIPTS_DB", DEFAULT_DB)
+# VIEWER_DB wins so this store stays separate from the warehouse RECEIPTS_DB.
+DB_PATH = os.environ.get("VIEWER_DB") or os.environ.get("RECEIPTS_DB", DEFAULT_DB)
+QUESTIONS_PATH = os.environ.get(
+    "QUESTIONS_PATH", os.path.join(ROOT, "eval", "questions_real.json"))
+_ensure_lock = threading.Lock()
 STATIC_DIR = os.path.join(HERE, "static")
 MAX_AGE_DEFAULT = 20.0  # seconds; the local timeline is ~85 s long
 MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -36,8 +40,28 @@ _local = threading.local()
 _meta_cache = {}
 
 
+def ensure_local_db():
+    """Build the local-clip store once clips are on disk. A missing folder is not an error:
+    the browse page still lists warehouse segments, and a later copy of clips/ is picked up."""
+    if os.path.exists(DB_PATH) or not os.path.isdir(CLIPS_DIR):
+        return
+    if not discover_clips(CLIPS_DIR):
+        return
+    with _ensure_lock:
+        if os.path.exists(DB_PATH):
+            return
+        try:
+            parent = os.path.dirname(os.path.abspath(DB_PATH))
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            build_store(DB_PATH, CLIPS_DIR, write_back=False)
+        except Exception as e:
+            sys.stderr.write("viewer ingest skipped: %s\n" % e)
+
+
 def get_store():
     """One sqlite connection per handler thread; reopened if ingest_clips.py rebuilt the file."""
+    ensure_local_db()
     if not os.path.exists(DB_PATH):
         return None
     st = os.stat(DB_PATH)
@@ -76,6 +100,23 @@ def created_rule(store, claim_id):
 
 def db_rows(store):
     return {r["clip_id"]: dict(r) for r in store.db.execute("SELECT * FROM clips")} if store else {}
+
+
+def api_questions():
+    """Labeled questions (eval/questions_real.json). clip_origin is the clip clock start."""
+    if not os.path.isfile(QUESTIONS_PATH):
+        return {"questions": [], "clip_clock": {}}
+    with open(QUESTIONS_PATH, encoding="utf-8") as f:
+        data = json.load(f)
+    clock = data.get("clip_clock") or {}
+    questions = []
+    for q in data.get("questions") or []:
+        item = dict(q)
+        origin = clock.get(q.get("expected_clip_id"))
+        if origin:
+            item["clip_origin"] = origin
+        questions.append(item)
+    return {"questions": questions, "clip_clock": clock, "label": data.get("_label", "")}
 
 
 def api_clips():
@@ -325,7 +366,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route(self, head):
         parsed = urlparse(self.path)
-        path = unquote(parsed.path).rstrip("/") or "/"
+        path = unquote(parsed.path)
+        if path.rstrip("/") == "/browse" or path.startswith("/browse/"):
+            path = path[len("/browse"):] or "/"
+        path = path.rstrip("/") or "/"
         q = {k: v[0] for k, v in parse_qs(parsed.query).items()}
         try:
             if path in ("/", "/index.html"):
@@ -338,6 +382,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": True, "db": os.path.exists(DB_PATH), "clips": len(clip_paths())}, head)
             if path == "/api/clips":
                 return self._json(200, api_clips(), head)
+            if path == "/api/questions":
+                return self._json(200, api_questions(), head)
             if path.startswith("/api/clips/") and path.endswith("/meta"):
                 meta = api_clip_meta(path[len("/api/clips/"):-len("/meta")])
                 return self._json(200, meta, head) if meta else self._json(404, {"error": "no such clip"}, head)

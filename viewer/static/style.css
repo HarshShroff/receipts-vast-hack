@@ -67,3 +67,8 @@ button:hover { filter:brightness(1.08); }
 table { width:100%; border-collapse:collapse; font-size:0.85rem; margin-top:0.6rem; }
 th, td { text-align:left; padding:0.35rem 0.3rem; border-bottom:1px solid var(--line); vertical-align:top; }
 th { color:var(--muted); font-weight:500; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; }
+.nav a { color: var(--accent); }
+.q { padding:0.6rem 0.7rem; border:1px solid var(--line); background:var(--panel); margin-bottom:0.45rem; cursor:pointer; }
+.q:hover, .q.on { border-color: var(--accent); }
+.q .prompt { font-weight:600; }
+.q .expect { margin-top:0.25rem; }

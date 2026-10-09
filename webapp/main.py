@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -211,6 +211,39 @@ def segment_playlist():
         "stream_url": stream_url(r["path"], clip_id=r["clip_id"]),
         "frames_url": f"api/frames?clip_id={quote(r['clip_id'], safe='')}",
     } for r in rows]
+
+
+def clip_detail(clip_id):
+    """Caption and claims for one warehouse segment. clip_id may be a filename suffix."""
+    store = STATE.get("store")
+    if not store or not clip_id:
+        return None
+    row = store.db.execute(
+        "SELECT clip_id, path, t_start, t_end, description FROM clips WHERE clip_id=?",
+        (clip_id,)).fetchone()
+    if row is None:
+        for r in store.db.execute(
+                "SELECT clip_id, path, t_start, t_end, description FROM clips"):
+            if r["clip_id"].endswith(clip_id) or clip_id.endswith(r["clip_id"]):
+                row = r
+                break
+    if row is None:
+        return None
+    claims = store.db.execute("""
+        SELECT c.entity, c.attribute, c.value, c.location, c.status, c.confidence,
+               e.t_start, e.t_end
+        FROM evidence e JOIN claims c ON c.id = e.claim_id
+        WHERE e.clip_id=?
+        ORDER BY e.t_start, c.entity
+    """, (row["clip_id"],)).fetchall()
+    return {
+        "clip_id": row["clip_id"],
+        "caption": row["description"] or "",
+        "t_start": row["t_start"],
+        "t_end": row["t_end"],
+        "stream_url": stream_url(row["path"], clip_id=row["clip_id"]),
+        "claims": [dict(c) for c in claims],
+    }
 
 
 def _seg_label(clip_id):
@@ -767,6 +800,9 @@ header{padding:.85rem 1.25rem .55rem;display:flex;flex-wrap:wrap;align-items:fle
 header h1{font-family:Syne,sans-serif;font-size:clamp(1.35rem,3.2vw,1.95rem);letter-spacing:.01em;margin:0;line-height:1.05}
 header h1 span{color:var(--accent)}
 header .tagline{color:var(--muted);font-size:.78rem;margin:.35rem 0 0;max-width:42rem;line-height:1.4}
+.pages{display:flex;gap:.4rem;margin:.55rem 0 0}
+.pages a{border:1px solid var(--accent);padding:.35rem .7rem;color:var(--accent);text-decoration:none;font-size:.78rem;letter-spacing:.06em}
+.pages a.on{background:var(--accent);color:#0b120e;font-weight:700}
 .live-ctl{display:flex;align-items:center;gap:.75rem;background:var(--panel);border:1px solid var(--line);padding:.5rem .8rem}
 .live-ctl label{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;font-size:.78rem;letter-spacing:.06em}
 .live-ctl input{accent-color:var(--green);width:1.1rem;height:1.1rem}
@@ -885,6 +921,10 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   <div>
     <h1>RECEIPTS <span>— video answers that know when they're out of date</span></h1>
     <p class="tagline">Every answer cites its clip. When newer footage contradicts it, the answer changes. When the footage stops, it says so. · <code id="camLabel">sdg_warehouse_cam-2</code></p>
+    <nav class="pages">
+      <a class="on" href="./">Warehouse</a>
+      <a id="browseLink" href="browse/">Browse clips</a>
+    </nav>
   </div>
   <div class="live-ctl">
     <button type="button" class="demo-btn" id="runDemo" title="key d">Run demo</button>
@@ -1520,6 +1560,14 @@ document.querySelectorAll('.presets button').forEach(b=>{
   b.addEventListener('click',()=>{ $('q').value=b.dataset.q; doAsk(); });
 });
 
+(function(){
+  var link=document.getElementById('browseLink');
+  if(!link) return;
+  var p=location.pathname;
+  var base=p.endsWith('/') ? p : p.replace(/[^/]*$/, '');
+  if(!base.endsWith('/')) base+='/';
+  link.href=base+'browse/';
+})();
 setInterval(()=>{ if(meta.ready && !document.hidden) refreshBoard(); }, 2500);
 init();
 setInterval(()=>{ if(!meta.ready) init(); }, 2500);
@@ -1528,9 +1576,75 @@ setInterval(()=>{ if(!meta.ready) init(); }, 2500);
 </html>
 """
 
+_VIEWER = None
+
+
+def _viewer_root():
+    here = os.path.dirname(os.path.abspath(__file__))
+    if os.path.isdir(os.path.join(here, "viewer")):
+        return here
+    return os.path.dirname(here)
+
+
+def _default_clips():
+    root = _viewer_root()
+    for cand in (os.path.join(root, "clips"),
+                 os.path.join(os.path.dirname(root), "clips"),
+                 "/data/clips"):
+        if os.path.isdir(cand):
+            return cand
+    return "/data/clips"
+
+
+def _load_viewer():
+    """Import the clip viewer without letting its sys.path insert shadow webapp modules."""
+    global _VIEWER
+    if _VIEWER is not None:
+        return _VIEWER
+    root = _viewer_root()
+    if root not in sys.path:
+        sys.path.append(root)
+    os.environ.setdefault("VIEWER_CLIPS", _default_clips())
+    os.environ.setdefault("VIEWER_DB", "/tmp/viewer-receipts.db")
+    snap = list(sys.path)
+    import viewer.serve as vs
+    sys.path[:] = snap
+    if root not in sys.path:
+        sys.path.append(root)
+    vs.CLIPS_DIR = os.environ["VIEWER_CLIPS"]
+    vs.DB_PATH = os.environ["VIEWER_DB"]
+    _VIEWER = vs
+    return vs
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+
+    def _viewer(self, head):
+        import types
+        vs = _load_viewer()
+        saved = {}
+        for name in ("_headers", "_send", "_json", "_static", "_video"):
+            saved[name] = getattr(self, name, None)
+            setattr(self, name, types.MethodType(getattr(vs.Handler, name), self))
+        try:
+            vs.Handler._route(self, head)
+        finally:
+            for name, old in saved.items():
+                if old is None:
+                    try:
+                        delattr(self, name)
+                    except AttributeError:
+                        pass
+                else:
+                    setattr(self, name, old)
+
+    def do_HEAD(self):
+        path = unquote(urlparse(self.path).path).rstrip("/") or "/"
+        if path == "/browse" or path.startswith("/browse/"):
+            return self._viewer(head=True)
+        self.send_error(405)
 
     def _send(self, code, body, content_type="text/html; charset=utf-8"):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -1593,7 +1707,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        path = parsed.path.rstrip("/") or "/"
+        path = unquote(parsed.path).rstrip("/") or "/"
+        if path == "/browse" or path.startswith("/browse/"):
+            return self._viewer(head=False)
         if path == "/health":
             return self._send(200, json.dumps({
                 "ok": True, "ready": STATE["ready"], "error": STATE["error"],
@@ -1626,6 +1742,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(503, json.dumps({"error": "not ready"}), "application/json")
             return self._send(200, json.dumps({"segments": segment_playlist()}),
                               "application/json")
+        if path == "/api/clip_claims":
+            if not STATE["ready"]:
+                return self._send(503, json.dumps({"error": "not ready"}), "application/json")
+            q = parse_qs(parsed.query)
+            detail = clip_detail((q.get("clip_id") or [None])[0])
+            if detail is None:
+                return self._send(404, json.dumps({"error": "clip not found"}), "application/json")
+            return self._send(200, json.dumps(detail), "application/json")
         if path == "/api/board":
             if not STATE["ready"]:
                 return self._send(503, json.dumps({"error": STATE["error"] or "not ready"}),

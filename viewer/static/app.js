@@ -4,8 +4,12 @@
 const $ = (s) => document.querySelector(s);
 const video = $('#v'), canvas = $('#overlay'), ctx = canvas.getContext('2d');
 const PALETTE = ['#c4a35a', '#6fbf8a', '#6ca0d9', '#d97b6c', '#b58bd9', '#d9b36c', '#6cd0c9', '#d96ca8'];
+const PINNED = [
+  'run_10_seed_213384163.ceiling_04.rgb_chunk_0000_segment_001_of_002.mp4',
+  'run_7_seed_900334964.eye_04.rgb_chunk_0000_segment_002_of_002.mp4',
+];
 const state = {clips: [], clip: null, meta: null, hidden: new Set(), activeKey: '', cite: null,
-               tmin: 0, tmax: 1};
+               tmin: 0, tmax: 1, questions: [], clock: {}};
 
 function colorFor(name) {
   let h = 0;
@@ -32,25 +36,100 @@ async function getJSON(url) {
 }
 
 // ------------------------------------------------------------- clips --
+function shortName(id) {
+  const m = String(id).match(/(ceiling_\d+|eye_\d+).*?segment_(\d+)/);
+  if (m) return m[1] + ' · seg ' + m[2];
+  return id.length > 56 ? id.slice(0, 54) + '…' : id;
+}
+function sameClip(a, b) {
+  if (!a || !b) return false;
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+function hms(s) {
+  if (s == null || s === '') return null;
+  const parts = String(s).trim().split(':').map(Number);
+  if (!parts.length || parts.some(n => Number.isNaN(n))) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0];
+}
+function questionOffset(q) {
+  const origin = hms(q.clip_origin || state.clock[q.expected_clip_id] || '0:00:00');
+  const at = hms(q.as_of);
+  if (origin == null || at == null) return 0;
+  return Math.max(0, at - origin);
+}
+function addOption(group, clip) {
+  const o = document.createElement('option');
+  o.value = clip.clip_id;
+  const when = clip.t_start != null ? ` · ${fmtAbs(clip.t_start)}–${fmtAbs(clip.t_end)}` : '';
+  o.textContent = clip.source === 'vast'
+    ? `${shortName(clip.clip_id)}${when}`
+    : `${clip.clip_id} · ${clip.scene}${when}`;
+  o.title = clip.clip_id;
+  group.appendChild(o);
+}
+async function loadVastSegments() {
+  try {
+    return await getJSON('../api/segments');
+  } catch (e) {
+    return {segments: [], error: e.message};
+  }
+}
 async function loadClips() {
   const d = await getJSON('api/clips');
-  state.clips = d.clips; state.tmin = d.t_min; state.tmax = d.t_max;
+  let qdoc = {questions: [], clip_clock: {}};
+  try { qdoc = await getJSON('api/questions'); } catch (e) { /* questions file optional */ }
+  state.questions = qdoc.questions || [];
+  state.clock = qdoc.clip_clock || {};
+  const vast = await loadVastSegments();
+  const segments = vast.segments || [];
+  const used = new Set();
+  const pinned = PINNED.map(name => {
+    const seg = segments.find(s => sameClip(s.clip_id, name));
+    if (seg) used.add(seg.clip_id);
+    const id = seg ? seg.clip_id : name;
+    return {clip_id: id, url: '../api/clip?clip_id=' + encodeURIComponent(id),
+            scene: 'warehouse', description: (seg && seg.caption) || name,
+            t_start: seg && seg.t_start, t_end: seg && seg.t_end,
+            source: 'vast', group: 'pinned', in_archive: !!seg};
+  });
+  const archive = segments.filter(s => !used.has(s.clip_id)).map(s => ({
+    clip_id: s.clip_id, url: '../api/clip?clip_id=' + encodeURIComponent(s.clip_id),
+    scene: 'warehouse', description: s.caption || '', t_start: s.t_start, t_end: s.t_end,
+    source: 'vast', group: 'archive', in_archive: true,
+  }));
+  const local = d.clips.filter(c => !String(c.clip_id).endsWith('_noaudio')).map(c => Object.assign(c, {source: 'local', group: 'local'}));
+  state.clips = pinned.concat(local, archive);
+  state.tmin = d.t_min; state.tmax = d.t_max;
   const sel = $('#clip');
   sel.innerHTML = '';
-  for (const c of d.clips) {
-    const o = document.createElement('option');
-    o.value = c.clip_id;
-    o.textContent = `${c.clip_id} · ${c.scene} · ${fmtAbs(c.t_start)}–${fmtAbs(c.t_end)}`;
-    sel.appendChild(o);
+  const groups = [['Warehouse — start here', pinned], ['Local clips', local], ['Rest of the archive', archive]];
+  for (const [label, items] of groups) {
+    if (!items.length) continue;
+    const g = document.createElement('optgroup');
+    g.label = label;
+    for (const c of items) addOption(g, c);
+    sel.appendChild(g);
   }
   const asof = $('#asof');
   asof.min = d.t_min; asof.max = d.t_max; asof.value = d.t_max;
   $('#asofval').textContent = fmtAbs(d.t_max);
   $('#maxage').value = d.max_age_default;
-  $('#dbnote').textContent = d.db ? '' : 'no receipts.db — run python3 viewer/ingest_clips.py';
+  const notes = [];
+  if (!d.db) notes.push('local receipts.db not built yet');
+  if (vast.error) notes.push('archive: ' + vast.error);
+  const missing = pinned.filter(c => !c.in_archive).map(c => shortName(c.clip_id));
+  if (segments.length && missing.length) notes.push('not in the index yet: ' + missing.join(', '));
+  $('#dbnote').textContent = notes.join(' · ');
   fillKeys(d.db ? await getJSON('api/keys') : []);
-  const first = decodeURIComponent(location.hash.slice(1)) || (d.clips[0] && d.clips[0].clip_id);
-  if (first && d.clips.some(c => c.clip_id === first)) { sel.value = first; await selectClip(first); }
+  const hash = decodeURIComponent(location.hash.slice(1));
+  const pinnedReady = pinned.find(c => c.in_archive);
+  const first = (hash && state.clips.some(c => c.clip_id === hash) && hash)
+    || (pinnedReady && pinnedReady.clip_id)
+    || (local[0] && local[0].clip_id)
+    || (pinned[0] && pinned[0].clip_id);
+  if (first) { sel.value = first; await selectClip(first); }
 }
 
 function fillKeys(keys) {
@@ -72,6 +151,11 @@ function fillKeys(keys) {
   });
 }
 
+function seekVideo(t) {
+  const seek = () => { video.currentTime = t; };
+  if (video.readyState >= 1) seek(); else video.addEventListener('loadedmetadata', seek, {once: true});
+}
+
 async function selectClip(id, seekTo) {
   const c = state.clips.find(x => x.clip_id === id);
   if (!c) return;
@@ -79,27 +163,90 @@ async function selectClip(id, seekTo) {
   location.hash = encodeURIComponent(id);
   $('#clip').value = id;
   if (video.getAttribute('src') !== c.url) { video.src = c.url; video.load(); }
-  state.meta = await getJSON(`api/clips/${encodeURIComponent(id)}/meta`);
-  indexTracks(state.meta);
   state.hidden.clear();
   state.activeKey = '';
-  renderClipInfo();
-  renderTimeline();
-  renderTracks();
-  renderSegments(video.currentTime || 0, true);
-  if (seekTo != null) {
-    const seek = () => { video.currentTime = seekTo; };
-    if (video.readyState >= 1) seek(); else video.addEventListener('loadedmetadata', seek, {once: true});
+  if (c.source === 'vast') {
+    state.meta = {has_sidecar: false, tracks: [], segments: [], zones: {}, in_db: false,
+                  video: {duration: (c.t_end != null && c.t_start != null) ? (c.t_end - c.t_start) : null}};
+    indexTracks(state.meta);
+    renderClipInfo();
+    renderTimeline();
+    renderTracks();
+    renderQuestions();
+    await renderVast(c);
+  } else {
+    state.meta = await getJSON(`api/clips/${encodeURIComponent(id)}/meta`);
+    indexTracks(state.meta);
+    renderClipInfo();
+    renderTimeline();
+    renderTracks();
+    renderSegments(video.currentTime || 0, true);
+    renderQuestions();
   }
+  if (seekTo != null) seekVideo(seekTo);
   draw(video.currentTime || 0);
 }
 
 function renderClipInfo() {
   const c = state.clip, m = state.meta, v = (m && m.video) || {};
-  $('#clipinfo').innerHTML = `${esc(c.description || '')} · <code>${v.width}×${v.height} @ ${v.fps} fps, ${(v.duration || 0).toFixed(1)} s</code>`
-    + ` · timeline ${fmtAbs(c.t_start)}–${fmtAbs(c.t_end)}`
-    + (m && m.has_sidecar ? '' : ' · <span class="err">no sidecar</span>')
-    + (m && m.in_db ? '' : ' · <span class="err">not in receipts.db</span>');
+  const dims = v.width ? ` · <code>${v.width}×${v.height} @ ${v.fps} fps, ${(v.duration || 0).toFixed(1)} s</code>` : '';
+  const where = c.source === 'vast' ? 'warehouse' : 'local';
+  $('#clipinfo').innerHTML = `<span class="meta">${where}</span> ${esc(c.description || '')}${dims}`
+    + (c.t_start != null ? ` · timeline ${fmtAbs(c.t_start)}–${fmtAbs(c.t_end)}` : '')
+    + (c.source === 'vast' ? '' : (m && m.has_sidecar ? '' : ' · <span class="err">no sidecar</span>'))
+    + (c.source === 'vast' ? (c.in_archive ? '' : ' · <span class="err">not in the index yet</span>')
+       : (m && m.in_db ? '' : ' · <span class="err">not in receipts.db</span>'));
+}
+
+function questionsFor(clip) {
+  if (!clip) return [];
+  return state.questions.filter(q => sameClip(q.expected_clip_id, clip.clip_id)
+    || sameClip(q.expected_clip_id, clip.clip_id.replace(/\.mp4$/, '')));
+}
+
+function renderQuestions() {
+  const qs = questionsFor(state.clip);
+  $('#qcount').textContent = qs.length ? String(qs.length) : '';
+  if (!qs.length) {
+    const note = state.clip && state.clip.source === 'vast'
+      ? 'No labeled questions for this warehouse segment. Claims from the index are under Segments.'
+      : 'No labeled questions for this clip.';
+    $('#questions').innerHTML = `<p class="meta">${note}</p>`;
+    return;
+  }
+  $('#questions').innerHTML = qs.map((q, i) => {
+    const stale = q.expected_stale ? badge('STALE') : '';
+    return `<div class="q" data-qi="${i}"><div class="prompt">${esc(q.question)}</div>`
+      + `<div class="expect">${esc(q.expected_answer)} ${stale}</div>`
+      + `<div class="meta">as of ${esc(q.as_of)} · ${esc(q.id)} · ${esc((q.expected_interval || []).join(' – '))}</div></div>`;
+  }).join('');
+  $('#questions').querySelectorAll('.q').forEach(el => el.addEventListener('click', () => {
+    const q = qs[Number(el.dataset.qi)];
+    $('#questions').querySelectorAll('.q').forEach(n => n.classList.remove('on'));
+    el.classList.add('on');
+    $('#follow').checked = false;
+    seekVideo(questionOffset(q));
+  }));
+}
+
+async function renderVast(c) {
+  $('#segcount').textContent = '';
+  $('#segments').innerHTML = '<p class="meta">Loading claims…</p>';
+  try {
+    const d = await getJSON('../api/clip_claims?clip_id=' + encodeURIComponent(c.clip_id));
+    const claims = d.claims || [];
+    $('#segcount').textContent = claims.length ? String(claims.length) : '(none)';
+    const cap = d.caption ? `<div class="action">${esc(d.caption)}</div>` : '';
+    const rows = claims.map(cl =>
+      `<div class="claim"><span class="key">${esc(cl.entity)} / ${esc(cl.attribute)} @ ${esc(cl.location)}</span>`
+      + `<span class="val">= ${esc(cl.value)}</span>${badge(String(cl.status || '').toUpperCase())}</div>`).join('');
+    $('#segments').innerHTML = `<div class="seg active"><div class="title"><span>Indexed caption</span></div>${cap}`
+      + (rows || '<p class="meta">No claims stored for this segment.</p>') + `</div>`;
+    if (d.caption) state.clip.description = d.caption;
+  } catch (e) {
+    $('#segcount').textContent = '';
+    $('#segments').innerHTML = `<p class="meta">${esc(e.message)}</p>`;
+  }
 }
 
 // ------------------------------------------------------------ tracks --

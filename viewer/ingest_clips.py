@@ -38,7 +38,8 @@ def scene_for(clip_id):
 
 def discover_clips(clips_dir=DEFAULT_CLIPS):
     """Absolute mp4 paths in timeline order."""
-    names = [f for f in os.listdir(clips_dir) if f.lower().endswith(".mp4")]
+    names = [f for f in os.listdir(clips_dir)
+             if f.lower().endswith(".mp4") and not f.lower().endswith("_noaudio.mp4")]
 
     def key(f):
         cid = clip_id_for(f)

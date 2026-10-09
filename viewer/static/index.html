@@ -9,7 +9,9 @@
 <body>
 <header>
   <h1>Receipts <span class="thin">clip viewer</span></h1>
-  <p class="sub">Footage with its claims over time: boxes from tracks, segments from the VLM, status from <code>receipts.db</code>.
+  <p class="sub nav"><a href="../">Warehouse board</a>
+    · local clips from <code>clips/</code>, detection boxes, and labeled questions.
+    Two warehouse segments are pinned; the rest of the archive is in the same list.
     <span id="dbnote" class="err"></span></p>
 </header>
 <main>
@@ -35,6 +37,8 @@
 
   <section class="cols">
     <div class="col">
+      <h2>Questions <span class="meta" id="qcount"></span></h2>
+      <div id="questions"></div>
       <h2>Segments <span class="meta" id="segcount"></span></h2>
       <div id="segments"></div>
     </div>
@@ -68,6 +72,14 @@
     </div>
   </section>
 </main>
-<script src="static/app.js"></script>
+<script>
+if (location.pathname.endsWith('/browse')) {
+  location.replace(location.pathname + '/' + location.search + location.hash);
+} else {
+  var s = document.createElement('script');
+  s.src = 'static/app.js';
+  document.body.appendChild(s);
+}
+</script>
 </body>
 </html>

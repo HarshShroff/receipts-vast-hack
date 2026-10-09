@@ -270,6 +270,22 @@ class ServeHandlers(unittest.TestCase):
         code, h, _ = self.get("/clips/bridge_01_road_clear.mp4", {"Range": "bytes=99999-"})
         self.assertEqual((code, h["Content-Range"]), (416, "bytes */10240"))
 
+    def test_browse_prefix_and_questions(self):
+        code, _, body = self.get("/browse/api/clips")
+        d = json.loads(body)
+        self.assertEqual(code, 200)
+        self.assertEqual(d["clips"][0]["clip_id"], "bridge_01_road_clear")
+        code, _, body = self.get("/browse/clips/bridge_01_road_clear.mp4", {"Range": "bytes=0-3"})
+        self.assertEqual((code, body), (206, bytes(range(4))))
+        code, _, body = self.get("/browse/")
+        self.assertEqual(code, 200)
+        self.assertIn(b"clip viewer", body)
+        code, _, body = self.get("/api/questions")
+        q = json.loads(body)
+        self.assertEqual(q["clip_clock"]["person_moving"], "12:03:00")
+        self.assertIn("r01", [item["id"] for item in q["questions"]])
+        self.assertEqual(q["questions"][0]["clip_origin"], "12:03:00")
+
     def test_path_guards(self):
         self.assertEqual(self.get("/clips/../serve.py")[0], 404)
         self.assertEqual(self.get("/clips/nope.mp4")[0], 404)
