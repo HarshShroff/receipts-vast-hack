@@ -36,7 +36,8 @@ You're a warehouse safety supervisor watching camera 2. The boxes on the video a
 
 ## 4. Proof (20s)
 - Scroll to the Eval chart. "We filmed this hall today and hand-labeled 6 questions about where someone was."
-- "After the camera stopped, four baselines answered with confidence: latest clip, retrieve-everything, and a short memory window. Only RECEIPTS flagged it."
+- "After the camera stopped, the four memory-based baselines (latest clip, retrieve-everything, short memory window) answered with confidence. RECEIPTS flagged it."
+- "Gemini Flash also got it right, but it re-watches the whole video for every question. RECEIPTS gets there from stored claims, with a cited clip and an audit trail, and no video re-read."
 - If the VSS agent card shows an answer: "We build on the event's own VSS agent and add time. Asked the same question, it answers with no timestamp and no stale flag."
 - Say "6 questions". Never a percentage.
 
@@ -60,4 +61,5 @@ Q&A notes
 - YOLO11 labels people only (no forklift class), so boxes appear on workers.
 - The retrieval-only agent is our own simulated baseline, not a named product.
 - The VSS agent card uses the event's agent-qa skill (search-and-answer endpoint when /agent/ask errors).
-- Eval: same claims for every system, so it tests time handling, not caption quality. n=6, labels by eye at 2 fps.
+- Eval: same claims for every memory baseline, so it tests time handling, not caption quality. n=6, labels by eye at 2 fps.
+- Gemini Flash (gemini-3.8-flash) watches the clip cut at the question time and may answer 'unknown'; it scored 6/6 too (one of three runs on r06 missing, free-tier quota). Don't claim RECEIPTS beats it on accuracy; the difference is cost per question, citations (5/6 vs 4/6 inside the labeled interval) and auditability.
