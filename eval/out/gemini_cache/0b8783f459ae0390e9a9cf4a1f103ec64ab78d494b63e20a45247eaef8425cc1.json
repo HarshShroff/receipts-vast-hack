@@ -1,0 +1,95 @@
+{
+ "created": "2026-10-09T15:48:53-0400",
+ "model_version": "gemini-3.8-flash",
+ "request": {
+  "fps": 2,
+  "model": "gemini-3.8-flash",
+  "prompt": "You are answering a question about footage from one fixed security camera.\n\nYou are given 2 video clip(s) in time order. Each is labeled with its clip id and the camera-clock range it covers.\nTime between clips was not recorded.\nThe question is asked at 09:06:24.\n\nQuestion: Where is the box truck?\n\nChoose exactly one answer from this list: \"under the bridge\", \"in the intersection in front of the bridge\", \"parked at the left edge of the frame\", \"unknown\". Answer \"unknown\" if the footage does not show it.\nCite the clip your answer is based on as clip_id, and the moment as t_start and t_end in seconds from the start of that clip.\nStaleness rule: set stale to true if your answer relies on footage that ends before the question time,\nor on evidence more than 900 seconds older than the question time. Otherwise set stale to false.\nGive a one-sentence reason.",
+  "repeat": 0,
+  "schema": {
+   "properties": {
+    "answer": {
+     "enum": [
+      "under the bridge",
+      "in the intersection in front of the bridge",
+      "parked at the left edge of the frame",
+      "unknown"
+     ],
+     "type": "STRING"
+    },
+    "clip_id": {
+     "enum": [
+      "bridge_01_road_clear",
+      "bridge_02_truck_stuck"
+     ],
+     "nullable": true,
+     "type": "STRING"
+    },
+    "reason": {
+     "type": "STRING"
+    },
+    "stale": {
+     "type": "BOOLEAN"
+    },
+    "t_end": {
+     "nullable": true,
+     "type": "NUMBER"
+    },
+    "t_start": {
+     "nullable": true,
+     "type": "NUMBER"
+    }
+   },
+   "propertyOrdering": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "required": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "type": "OBJECT"
+  },
+  "temperature": 0.0,
+  "video": [
+   {
+    "text": "Clip bridge_01_road_clear: camera clock 09:06:05 to 09:06:14.009"
+   },
+   {
+    "video": "d7231ca8b9e2dc0ce1897dc121b8cd5fa1230ab88e064adeafc65cc1500ab139:9.009:libx264 crf23 720p noaudio"
+   },
+   {
+    "text": "Clip bridge_02_truck_stuck: camera clock 09:06:21 to 09:06:24"
+   },
+   {
+    "video": "bfc37b4502f8cf35f2dac1731a3da2afd386da337fc33454e07855a8f38d2819:3.000:libx264 crf23 720p noaudio"
+   }
+  ]
+ },
+ "text": "{\n  \"answer\": \"under the bridge\",\n  \"clip_id\": \"bridge_02_truck_stuck\",\n  \"t_start\": 0.0,\n  \"t_end\": 2.5,\n  \"stale\": false,\n  \"reason\": \"A yellow Penske box truck is wedged under the bridge clearance beam throughout the clip up to the current time.\"\n}",
+ "usage": {
+  "candidatesTokenCount": 92,
+  "promptTokenCount": 1867,
+  "promptTokensDetails": [
+   {
+    "modality": "TEXT",
+    "tokenCount": 283
+   },
+   {
+    "modality": "VIDEO",
+    "tokenCount": 1584
+   }
+  ],
+  "serviceTier": "standard",
+  "thoughtsTokenCount": 430,
+  "totalTokenCount": 2389
+ }
+}

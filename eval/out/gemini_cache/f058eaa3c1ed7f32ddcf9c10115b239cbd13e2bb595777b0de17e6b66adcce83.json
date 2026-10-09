@@ -1,0 +1,87 @@
+{
+ "created": "2026-10-09T15:50:33-0400",
+ "model_version": "gemini-3.8-flash",
+ "request": {
+  "fps": 2,
+  "model": "gemini-3.8-flash",
+  "prompt": "You are answering a question about footage from one fixed security camera.\n\nYou are given 1 video clip(s) in time order. Each is labeled with its clip id and the camera-clock range it covers.\nTime between clips was not recorded.\nThe question is asked at 18:00:40.\n\nQuestion: Is the garage floor cluttered or clear?\n\nChoose exactly one answer from this list: \"cluttered\", \"clear\", \"unknown\". Answer \"unknown\" if the footage does not show it.\nCite the clip your answer is based on as clip_id, and the moment as t_start and t_end in seconds from the start of that clip.\nStaleness rule: set stale to true if your answer relies on footage that ends before the question time,\nor on evidence more than 900 seconds older than the question time. Otherwise set stale to false.\nGive a one-sentence reason.",
+  "repeat": 0,
+  "schema": {
+   "properties": {
+    "answer": {
+     "enum": [
+      "cluttered",
+      "clear",
+      "unknown"
+     ],
+     "type": "STRING"
+    },
+    "clip_id": {
+     "enum": [
+      "garage_01_cluttered"
+     ],
+     "nullable": true,
+     "type": "STRING"
+    },
+    "reason": {
+     "type": "STRING"
+    },
+    "stale": {
+     "type": "BOOLEAN"
+    },
+    "t_end": {
+     "nullable": true,
+     "type": "NUMBER"
+    },
+    "t_start": {
+     "nullable": true,
+     "type": "NUMBER"
+    }
+   },
+   "propertyOrdering": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "required": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "type": "OBJECT"
+  },
+  "temperature": 0.0,
+  "video": [
+   {
+    "text": "Clip garage_01_cluttered: camera clock 18:00:00 to 18:00:12"
+   },
+   {
+    "video": "4087fb0c14114088152edd00c2d8c2d3cc14006bf7aecf53050ac0d216219dd1:12.000:libx264 crf23 720p noaudio"
+   }
+  ]
+ },
+ "text": "{\n  \"answer\": \"cluttered\",\n  \"clip_id\": \"garage_01_cluttered\",\n  \"t_start\": 0.0,\n  \"t_end\": 11.5,\n  \"stale\": true,\n  \"reason\": \"The garage floor is cluttered with various items, including a garden hose, buckets, boxes, and other loose belongings.\"\n}",
+ "usage": {
+  "candidatesTokenCount": 90,
+  "promptTokenCount": 1741,
+  "promptTokensDetails": [
+   {
+    "modality": "VIDEO",
+    "tokenCount": 1512
+   },
+   {
+    "modality": "TEXT",
+    "tokenCount": 229
+   }
+  ],
+  "serviceTier": "standard",
+  "thoughtsTokenCount": 364,
+  "totalTokenCount": 2195
+ }
+}

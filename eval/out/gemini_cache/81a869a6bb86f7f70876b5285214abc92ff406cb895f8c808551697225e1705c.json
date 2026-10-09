@@ -1,0 +1,94 @@
+{
+ "created": "2026-10-09T15:51:25-0400",
+ "model_version": "gemini-3.8-flash",
+ "request": {
+  "fps": 2,
+  "model": "gemini-3.8-flash",
+  "prompt": "You are answering a question about footage from one fixed security camera.\n\nYou are given 2 video clip(s) in time order. Each is labeled with its clip id and the camera-clock range it covers.\nTime between clips was not recorded.\nThe question is asked at 18:01:09.9.\n\nQuestion: Is the garage door open or closed?\n\nChoose exactly one answer from this list: \"open\", \"closed\", \"unknown\". Answer \"unknown\" if the footage does not show it.\nCite the clip your answer is based on as clip_id, and the moment as t_start and t_end in seconds from the start of that clip.\nStaleness rule: set stale to true if your answer relies on footage that ends before the question time,\nor on evidence more than 900 seconds older than the question time. Otherwise set stale to false.\nGive a one-sentence reason.",
+  "repeat": 0,
+  "schema": {
+   "properties": {
+    "answer": {
+     "enum": [
+      "open",
+      "closed",
+      "unknown"
+     ],
+     "type": "STRING"
+    },
+    "clip_id": {
+     "enum": [
+      "garage_01_cluttered",
+      "garage_02_cleared"
+     ],
+     "nullable": true,
+     "type": "STRING"
+    },
+    "reason": {
+     "type": "STRING"
+    },
+    "stale": {
+     "type": "BOOLEAN"
+    },
+    "t_end": {
+     "nullable": true,
+     "type": "NUMBER"
+    },
+    "t_start": {
+     "nullable": true,
+     "type": "NUMBER"
+    }
+   },
+   "propertyOrdering": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "required": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "type": "OBJECT"
+  },
+  "temperature": 0.0,
+  "video": [
+   {
+    "text": "Clip garage_01_cluttered: camera clock 18:00:00 to 18:00:12"
+   },
+   {
+    "video": "4087fb0c14114088152edd00c2d8c2d3cc14006bf7aecf53050ac0d216219dd1:12.000:libx264 crf23 720p noaudio"
+   },
+   {
+    "text": "Clip garage_02_cleared: camera clock 18:01:00 to 18:01:09.9"
+   },
+   {
+    "video": "dd3c4d9d2180fd3e5f5a11a12a88a0f10606f1d2c7365207ed2db7281e44fb21:9.900:libx264 crf23 720p noaudio"
+   }
+  ]
+ },
+ "text": "{\n  \"answer\": \"closed\",\n  \"clip_id\": \"garage_02_cleared\",\n  \"t_start\": 9.5,\n  \"t_end\": 9.9,\n  \"stale\": false,\n  \"reason\": \"The garage door has finished closing and is fully down at the end of the clip.\"\n}",
+ "usage": {
+  "candidatesTokenCount": 82,
+  "promptTokenCount": 3034,
+  "promptTokensDetails": [
+   {
+    "modality": "VIDEO",
+    "tokenCount": 2772
+   },
+   {
+    "modality": "TEXT",
+    "tokenCount": 262
+   }
+  ],
+  "serviceTier": "standard",
+  "thoughtsTokenCount": 414,
+  "totalTokenCount": 3530
+ }
+}

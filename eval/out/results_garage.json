@@ -1,0 +1,873 @@
+{
+  "questions": "questions_garage.json",
+  "label_status": "draft",
+  "notes": [
+    "store: eye-checked label intervals in ev_garage.db",
+    "claims are the eye-checked label intervals, so Receipts is scored on those labels",
+    "LABELS ARE A DRAFT: not yet checked by a human; do not quote these numbers",
+    "VSS agent-qa and LLM-over-captions were not called (--live not set)",
+    "Gemini Flash (gemini-3.8-flash) watches every clip of the scene that started before as_of (2 clips), the last cut at as_of (720p, 2 fps sampling, temperature 0), answers from the label vocabulary or 'unknown', majority of 1 run(s); prompt in baselines_gemini.PROMPT_SCENE"
+  ],
+  "summaries": {
+    "Receipts (supersession)": {
+      "n": 7,
+      "exact": 7,
+      "cited_in_interval": 5,
+      "answered": 7,
+      "stale_claim": 0,
+      "stale_flag_ok": 7,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 2
+    },
+    "B1 no-memory (latest clip)": {
+      "n": 7,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 7,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "B2 RAG-all (ties->oldest)": {
+      "n": 7,
+      "exact": 2,
+      "cited_in_interval": 1,
+      "answered": 7,
+      "stale_claim": 4,
+      "stale_flag_ok": 5,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "B2 RAG-all (ties->newest)": {
+      "n": 7,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 7,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "B3 last-2-clips window": {
+      "n": 7,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 7,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "Gemini Flash, full video to as_of (gemini-3.8-flash)": {
+      "n": 7,
+      "exact": 7,
+      "cited_in_interval": 1,
+      "answered": 7,
+      "stale_claim": 0,
+      "stale_flag_ok": 7,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 2,
+      "model_id": "gemini-3.8-flash",
+      "repeats": 1,
+      "complete_runs": 1,
+      "exact_runs": [
+        7
+      ],
+      "after_footage_runs": [
+        2
+      ]
+    }
+  },
+  "per_question": {
+    "Receipts (supersession)": [
+      {
+        "id": "g01",
+        "expected": "cluttered",
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g02",
+        "expected": null,
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": true
+      },
+      {
+        "id": "g03",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g04",
+        "expected": "open",
+        "answer": "open",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64869.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g05",
+        "expected": "closed",
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g06",
+        "expected": null,
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": true
+      },
+      {
+        "id": "g07",
+        "expected": "no",
+        "answer": "no",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B1 no-memory (latest clip)": [
+      {
+        "id": "g01",
+        "expected": "cluttered",
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g02",
+        "expected": null,
+        "answer": "cluttered",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g03",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g04",
+        "expected": "open",
+        "answer": "open",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64869.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g05",
+        "expected": "closed",
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g06",
+        "expected": null,
+        "answer": "closed",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g07",
+        "expected": "no",
+        "answer": "no",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B2 RAG-all (ties->oldest)": [
+      {
+        "id": "g01",
+        "expected": "cluttered",
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g02",
+        "expected": null,
+        "answer": "cluttered",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g03",
+        "expected": "clear",
+        "answer": "cluttered",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g04",
+        "expected": "open",
+        "answer": "open",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g05",
+        "expected": "closed",
+        "answer": "open",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g06",
+        "expected": null,
+        "answer": "open",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g07",
+        "expected": "no",
+        "answer": "yes",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B2 RAG-all (ties->newest)": [
+      {
+        "id": "g01",
+        "expected": "cluttered",
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g02",
+        "expected": null,
+        "answer": "cluttered",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g03",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g04",
+        "expected": "open",
+        "answer": "open",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64869.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g05",
+        "expected": "closed",
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g06",
+        "expected": null,
+        "answer": "closed",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g07",
+        "expected": "no",
+        "answer": "no",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B3 last-2-clips window": [
+      {
+        "id": "g01",
+        "expected": "cluttered",
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g02",
+        "expected": null,
+        "answer": "cluttered",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64800.0,
+          64812.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g03",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g04",
+        "expected": "open",
+        "answer": "open",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64869.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g05",
+        "expected": "closed",
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g06",
+        "expected": null,
+        "answer": "closed",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "g07",
+        "expected": "no",
+        "answer": "no",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          64860.0,
+          64870.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "Gemini Flash, full video to as_of (gemini-3.8-flash)": [
+      {
+        "id": "g01",
+        "expected": "cluttered",
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": 64805.5,
+        "cited_interval": [
+          64800.0,
+          64805.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage floor is cluttered with various objects, including boxes, a garden hose, buckets, and chairs.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "cluttered",
+            "stale": false,
+            "clip_id": "garage_01_cluttered",
+            "t_start": 64800.0,
+            "t_end": 64805.5,
+            "reason": "The garage floor is cluttered with various objects, including boxes, a garden hose, buckets, and chairs."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_01_cluttered",
+        "t_start": 64800.0,
+        "t_end": 64805.5
+      },
+      {
+        "id": "g02",
+        "expected": null,
+        "answer": "cluttered",
+        "exact": true,
+        "cited_time_s": 64811.5,
+        "cited_interval": [
+          64800.0,
+          64811.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage floor is cluttered with various items, including a garden hose, buckets, boxes, and other loose belongings.",
+        "stale": true,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "cluttered",
+            "stale": true,
+            "clip_id": "garage_01_cluttered",
+            "t_start": 64800.0,
+            "t_end": 64811.5,
+            "reason": "The garage floor is cluttered with various items, including a garden hose, buckets, boxes, and other loose belongings."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_01_cluttered",
+        "t_start": 64800.0,
+        "t_end": 64811.5
+      },
+      {
+        "id": "g03",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": 64864.5,
+        "cited_interval": [
+          64862.0,
+          64864.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage floor has been cleaned and cleared of the scattered boxes, hose, and clutter that were previously present.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "clear",
+            "stale": false,
+            "clip_id": "garage_02_cleared",
+            "t_start": 64862.0,
+            "t_end": 64864.5,
+            "reason": "The garage floor has been cleaned and cleared of the scattered boxes, hose, and clutter that were previously present."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_02_cleared",
+        "t_start": 64862.0,
+        "t_end": 64864.5
+      },
+      {
+        "id": "g04",
+        "expected": "open",
+        "answer": "open",
+        "exact": true,
+        "cited_time_s": 64865.0,
+        "cited_interval": [
+          64864.0,
+          64865.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage door remains fully open, showing the outdoor driveway and evening sky.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "open",
+            "stale": false,
+            "clip_id": "garage_02_cleared",
+            "t_start": 64864.0,
+            "t_end": 64865.0,
+            "reason": "The garage door remains fully open, showing the outdoor driveway and evening sky."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_02_cleared",
+        "t_start": 64864.0,
+        "t_end": 64865.0
+      },
+      {
+        "id": "g05",
+        "expected": "closed",
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": 64869.9,
+        "cited_interval": [
+          64869.5,
+          64869.9
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage door has finished closing and is fully down at the end of the clip.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "closed",
+            "stale": false,
+            "clip_id": "garage_02_cleared",
+            "t_start": 64869.5,
+            "t_end": 64869.9,
+            "reason": "The garage door has finished closing and is fully down at the end of the clip."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_02_cleared",
+        "t_start": 64869.5,
+        "t_end": 64869.9
+      },
+      {
+        "id": "g06",
+        "expected": null,
+        "answer": "closed",
+        "exact": true,
+        "cited_time_s": 64870.0,
+        "cited_interval": [
+          64869.5,
+          64870.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage door is seen fully closed at the end of the clip.",
+        "stale": true,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "closed",
+            "stale": true,
+            "clip_id": "garage_02_cleared",
+            "t_start": 64869.5,
+            "t_end": 64870.0,
+            "reason": "The garage door is seen fully closed at the end of the clip."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_02_cleared",
+        "t_start": 64869.5,
+        "t_end": 64870.0
+      },
+      {
+        "id": "g07",
+        "expected": "no",
+        "answer": "no",
+        "exact": true,
+        "cited_time_s": 64865.0,
+        "cited_interval": [
+          64864.0,
+          64865.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The garage floor has been cleared and the red bucket is no longer present.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "no",
+            "stale": false,
+            "clip_id": "garage_02_cleared",
+            "t_start": 64864.0,
+            "t_end": 64865.0,
+            "reason": "The garage floor has been cleared and the red bucket is no longer present."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "garage_02_cleared",
+        "t_start": 64864.0,
+        "t_end": 64865.0
+      }
+    ]
+  }
+}

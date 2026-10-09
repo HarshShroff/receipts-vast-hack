@@ -1,0 +1,87 @@
+{
+ "created": "2026-10-09T15:47:33-0400",
+ "model_version": "gemini-3.8-flash",
+ "request": {
+  "fps": 2,
+  "model": "gemini-3.8-flash",
+  "prompt": "You are answering a question about footage from one fixed security camera.\n\nYou are given 1 video clip(s) in time order. Each is labeled with its clip id and the camera-clock range it covers.\nTime between clips was not recorded.\nThe question is asked at 09:06:18.\n\nQuestion: Is the underpass under the bridge blocked or clear?\n\nChoose exactly one answer from this list: \"clear\", \"blocked\", \"unknown\". Answer \"unknown\" if the footage does not show it.\nCite the clip your answer is based on as clip_id, and the moment as t_start and t_end in seconds from the start of that clip.\nStaleness rule: set stale to true if your answer relies on footage that ends before the question time,\nor on evidence more than 900 seconds older than the question time. Otherwise set stale to false.\nGive a one-sentence reason.",
+  "repeat": 0,
+  "schema": {
+   "properties": {
+    "answer": {
+     "enum": [
+      "clear",
+      "blocked",
+      "unknown"
+     ],
+     "type": "STRING"
+    },
+    "clip_id": {
+     "enum": [
+      "bridge_01_road_clear"
+     ],
+     "nullable": true,
+     "type": "STRING"
+    },
+    "reason": {
+     "type": "STRING"
+    },
+    "stale": {
+     "type": "BOOLEAN"
+    },
+    "t_end": {
+     "nullable": true,
+     "type": "NUMBER"
+    },
+    "t_start": {
+     "nullable": true,
+     "type": "NUMBER"
+    }
+   },
+   "propertyOrdering": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "required": [
+    "answer",
+    "clip_id",
+    "t_start",
+    "t_end",
+    "stale",
+    "reason"
+   ],
+   "type": "OBJECT"
+  },
+  "temperature": 0.0,
+  "video": [
+   {
+    "text": "Clip bridge_01_road_clear: camera clock 09:06:05 to 09:06:14.009"
+   },
+   {
+    "video": "d7231ca8b9e2dc0ce1897dc121b8cd5fa1230ab88e064adeafc65cc1500ab139:9.009:libx264 crf23 720p noaudio"
+   }
+  ]
+ },
+ "text": "{\n  \"answer\": \"clear\",\n  \"clip_id\": \"bridge_01_road_clear\",\n  \"t_start\": 7.0,\n  \"t_end\": 8.5,\n  \"stale\": true,\n  \"reason\": \"Vehicles are driving smoothly under the bridge without any obstruction, indicating the underpass is clear.\"\n}",
+ "usage": {
+  "candidatesTokenCount": 85,
+  "promptTokenCount": 1424,
+  "promptTokensDetails": [
+   {
+    "modality": "VIDEO",
+    "tokenCount": 1188
+   },
+   {
+    "modality": "TEXT",
+    "tokenCount": 236
+   }
+  ],
+  "serviceTier": "standard",
+  "thoughtsTokenCount": 469,
+  "totalTokenCount": 1978
+ }
+}

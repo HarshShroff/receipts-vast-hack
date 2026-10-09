@@ -1,0 +1,1077 @@
+{
+  "questions": "questions_bridge.json",
+  "label_status": "draft",
+  "notes": [
+    "store: eye-checked label intervals in ev_bridge.db",
+    "claims are the eye-checked label intervals, so Receipts is scored on those labels",
+    "LABELS ARE A DRAFT: not yet checked by a human; do not quote these numbers",
+    "VSS agent-qa and LLM-over-captions were not called (--live not set)",
+    "Gemini Flash (gemini-3.8-flash) watches every clip of the scene that started before as_of (3 clips), the last cut at as_of (720p, 2 fps sampling, temperature 0), answers from the label vocabulary or 'unknown', majority of 1 run(s); prompt in baselines_gemini.PROMPT_SCENE"
+  ],
+  "summaries": {
+    "Receipts (supersession)": {
+      "n": 9,
+      "exact": 9,
+      "cited_in_interval": 6,
+      "answered": 8,
+      "stale_claim": 0,
+      "stale_flag_ok": 9,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 2
+    },
+    "B1 no-memory (latest clip)": {
+      "n": 9,
+      "exact": 7,
+      "cited_in_interval": 6,
+      "answered": 8,
+      "stale_claim": 0,
+      "stale_flag_ok": 7,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "B2 RAG-all (ties->oldest)": {
+      "n": 9,
+      "exact": 4,
+      "cited_in_interval": 2,
+      "answered": 8,
+      "stale_claim": 5,
+      "stale_flag_ok": 7,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "B2 RAG-all (ties->newest)": {
+      "n": 9,
+      "exact": 7,
+      "cited_in_interval": 6,
+      "answered": 8,
+      "stale_claim": 0,
+      "stale_flag_ok": 7,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "B3 last-2-clips window": {
+      "n": 9,
+      "exact": 7,
+      "cited_in_interval": 6,
+      "answered": 8,
+      "stale_claim": 0,
+      "stale_flag_ok": 7,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 0
+    },
+    "Gemini Flash, full video to as_of (gemini-3.8-flash)": {
+      "n": 9,
+      "exact": 9,
+      "cited_in_interval": 4,
+      "answered": 8,
+      "stale_claim": 0,
+      "stale_flag_ok": 9,
+      "after_footage_n": 2,
+      "after_footage_correct_stale": 2,
+      "model_id": "gemini-3.8-flash",
+      "repeats": 1,
+      "complete_runs": 1,
+      "exact_runs": [
+        9
+      ],
+      "after_footage_runs": [
+        2
+      ]
+    }
+  },
+  "per_question": {
+    "Receipts (supersession)": [
+      {
+        "id": "b01",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b02",
+        "expected": null,
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": true
+      },
+      {
+        "id": "b03",
+        "expected": "blocked",
+        "answer": "blocked",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b04",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b05",
+        "expected": null,
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": true
+      },
+      {
+        "id": "b06",
+        "expected": null,
+        "answer": null,
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b07",
+        "expected": "under the bridge",
+        "answer": "under the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b08",
+        "expected": "in the intersection in front of the bridge",
+        "answer": "in the intersection in front of the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32801.0,
+          32816.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b09",
+        "expected": "parked at the left edge of the frame",
+        "answer": "parked at the left edge of the frame",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32844.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B1 no-memory (latest clip)": [
+      {
+        "id": "b01",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b02",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b03",
+        "expected": "blocked",
+        "answer": "blocked",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b04",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b05",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b06",
+        "expected": null,
+        "answer": null,
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b07",
+        "expected": "under the bridge",
+        "answer": "under the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b08",
+        "expected": "in the intersection in front of the bridge",
+        "answer": "in the intersection in front of the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32801.0,
+          32816.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b09",
+        "expected": "parked at the left edge of the frame",
+        "answer": "parked at the left edge of the frame",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32844.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B2 RAG-all (ties->oldest)": [
+      {
+        "id": "b01",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b02",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b03",
+        "expected": "blocked",
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b04",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b05",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b06",
+        "expected": null,
+        "answer": null,
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b07",
+        "expected": "under the bridge",
+        "answer": "under the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b08",
+        "expected": "in the intersection in front of the bridge",
+        "answer": "under the bridge",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b09",
+        "expected": "parked at the left edge of the frame",
+        "answer": "under the bridge",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B2 RAG-all (ties->newest)": [
+      {
+        "id": "b01",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b02",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b03",
+        "expected": "blocked",
+        "answer": "blocked",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b04",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b05",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b06",
+        "expected": null,
+        "answer": null,
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b07",
+        "expected": "under the bridge",
+        "answer": "under the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b08",
+        "expected": "in the intersection in front of the bridge",
+        "answer": "in the intersection in front of the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32801.0,
+          32816.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b09",
+        "expected": "parked at the left edge of the frame",
+        "answer": "parked at the left edge of the frame",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32844.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B3 last-2-clips window": [
+      {
+        "id": "b01",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b02",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32765.0,
+          32774.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b03",
+        "expected": "blocked",
+        "answer": "blocked",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b04",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b05",
+        "expected": null,
+        "answer": "clear",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32851.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b06",
+        "expected": null,
+        "answer": null,
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b07",
+        "expected": "under the bridge",
+        "answer": "under the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32781.0,
+          32785.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b08",
+        "expected": "in the intersection in front of the bridge",
+        "answer": "in the intersection in front of the bridge",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32801.0,
+          32816.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "b09",
+        "expected": "parked at the left edge of the frame",
+        "answer": "parked at the left edge of the frame",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": [
+          32841.0,
+          32844.0
+        ],
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "Gemini Flash, full video to as_of (gemini-3.8-flash)": [
+      {
+        "id": "b01",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": 32769.5,
+        "cited_interval": [
+          32768.5,
+          32769.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "Vehicles are driving smoothly under the bridge with no obstructions blocking the roadway.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "clear",
+            "stale": false,
+            "clip_id": "bridge_01_road_clear",
+            "t_start": 32768.5,
+            "t_end": 32769.5,
+            "reason": "Vehicles are driving smoothly under the bridge with no obstructions blocking the roadway."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_01_road_clear",
+        "t_start": 32768.5,
+        "t_end": 32769.5
+      },
+      {
+        "id": "b02",
+        "expected": null,
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": 32773.5,
+        "cited_interval": [
+          32772.0,
+          32773.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "Vehicles are driving smoothly under the bridge without any obstruction, indicating the underpass is clear.",
+        "stale": true,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "clear",
+            "stale": true,
+            "clip_id": "bridge_01_road_clear",
+            "t_start": 32772.0,
+            "t_end": 32773.5,
+            "reason": "Vehicles are driving smoothly under the bridge without any obstruction, indicating the underpass is clear."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_01_road_clear",
+        "t_start": 32772.0,
+        "t_end": 32773.5
+      },
+      {
+        "id": "b03",
+        "expected": "blocked",
+        "answer": "blocked",
+        "exact": true,
+        "cited_time_s": 32783.5,
+        "cited_interval": [
+          32781.0,
+          32783.5
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "A yellow Penske truck has collided with and is wedged underneath the low clearance bridge, blocking the lane.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "blocked",
+            "stale": false,
+            "clip_id": "bridge_02_truck_stuck",
+            "t_start": 32781.0,
+            "t_end": 32783.5,
+            "reason": "A yellow Penske truck has collided with and is wedged underneath the low clearance bridge, blocking the lane."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_02_truck_stuck",
+        "t_start": 32781.0,
+        "t_end": 32783.5
+      },
+      {
+        "id": "b04",
+        "expected": "clear",
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": 32848.0,
+        "cited_interval": [
+          32845.0,
+          32848.0
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The truck has backed into a side street and vehicles are freely driving through the underpass.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "clear",
+            "stale": false,
+            "clip_id": "bridge_03_road_clear_again",
+            "t_start": 32845.0,
+            "t_end": 32848.0,
+            "reason": "The truck has backed into a side street and vehicles are freely driving through the underpass."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_03_road_clear_again",
+        "t_start": 32845.0,
+        "t_end": 32848.0
+      },
+      {
+        "id": "b05",
+        "expected": null,
+        "answer": "clear",
+        "exact": true,
+        "cited_time_s": 32850.5,
+        "cited_interval": [
+          32845.0,
+          32850.5
+        ],
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "The Penske truck has backed away and vehicles are driving through the underpass without obstruction.",
+        "stale": true,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "clear",
+            "stale": true,
+            "clip_id": "bridge_03_road_clear_again",
+            "t_start": 32845.0,
+            "t_end": 32850.5,
+            "reason": "The Penske truck has backed away and vehicles are driving through the underpass without obstruction."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_03_road_clear_again",
+        "t_start": 32845.0,
+        "t_end": 32850.5
+      },
+      {
+        "id": "b06",
+        "expected": null,
+        "answer": null,
+        "exact": true,
+        "cited_time_s": null,
+        "cited_interval": null,
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "No box truck appears anywhere in the provided footage.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": null,
+            "stale": false,
+            "clip_id": null,
+            "t_start": null,
+            "t_end": null,
+            "reason": "No box truck appears anywhere in the provided footage."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": null,
+        "t_start": null,
+        "t_end": null
+      },
+      {
+        "id": "b07",
+        "expected": "under the bridge",
+        "answer": "under the bridge",
+        "exact": true,
+        "cited_time_s": 32783.5,
+        "cited_interval": [
+          32781.0,
+          32783.5
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "A yellow Penske box truck is wedged under the bridge clearance beam throughout the clip up to the current time.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "under the bridge",
+            "stale": false,
+            "clip_id": "bridge_02_truck_stuck",
+            "t_start": 32781.0,
+            "t_end": 32783.5,
+            "reason": "A yellow Penske box truck is wedged under the bridge clearance beam throughout the clip up to the current time."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_02_truck_stuck",
+        "t_start": 32781.0,
+        "t_end": 32783.5
+      },
+      {
+        "id": "b08",
+        "expected": "in the intersection in front of the bridge",
+        "answer": "in the intersection in front of the bridge",
+        "exact": true,
+        "cited_time_s": 32809.5,
+        "cited_interval": [
+          32801.0,
+          32809.5
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "After backing out from under the bridge, the yellow Penske box truck sits stopped in the intersection in front of the bridge.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "in the intersection in front of the bridge",
+            "stale": false,
+            "clip_id": "bridge_02_truck_stuck",
+            "t_start": 32801.0,
+            "t_end": 32809.5,
+            "reason": "After backing out from under the bridge, the yellow Penske box truck sits stopped in the intersection in front of the bridge."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_02_truck_stuck",
+        "t_start": 32801.0,
+        "t_end": 32809.5
+      },
+      {
+        "id": "b09",
+        "expected": "parked at the left edge of the frame",
+        "answer": "parked at the left edge of the frame",
+        "exact": true,
+        "cited_time_s": 32842.5,
+        "cited_interval": [
+          32841.0,
+          32842.5
+        ],
+        "cited_in_interval": true,
+        "time_restricted": true,
+        "model_id": "gemini-3.8-flash",
+        "note": "At the question time of 09:07:23, the Penske box truck has backed up and is parked along the left edge of the frame.",
+        "stale": false,
+        "agreement": "1/1",
+        "repeats": [
+          {
+            "answer": "parked at the left edge of the frame",
+            "stale": false,
+            "clip_id": "bridge_03_road_clear_again",
+            "t_start": 32841.0,
+            "t_end": 32842.5,
+            "reason": "At the question time of 09:07:23, the Penske box truck has backed up and is parked along the left edge of the frame."
+          }
+        ],
+        "runs_missing": 0,
+        "clip_id": "bridge_03_road_clear_again",
+        "t_start": 32841.0,
+        "t_end": 32842.5
+      }
+    ]
+  }
+}
