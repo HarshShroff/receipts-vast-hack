@@ -856,9 +856,13 @@ main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
 #demoCaption{display:none;margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--accent);background:#152018;color:var(--fg);font-size:.9rem;letter-spacing:.01em}
 #demoCaption.show{display:block}
 #demoCaption .beat{color:var(--muted);font-size:.72rem;margin-right:.5rem}
+#winTip{margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--line);background:#152018;color:var(--fg);font-size:.88rem;letter-spacing:.01em}
+#winTip[hidden]{display:none!important}
 button.demo-btn.next{border-color:var(--accent);color:var(--accent)}
 .naive-card.demo-hl{outline:2px solid var(--accent);outline-offset:2px;background:#1e2a22}
 #naive-slot.demo-hl .naive-card{outline:2px solid var(--red);outline-offset:2px}
+@keyframes stalePulse{0%{box-shadow:0 0 0 0 rgba(228,87,74,.55)}70%{box-shadow:0 0 0 12px rgba(228,87,74,0)}100%{box-shadow:0 0 0 0 rgba(228,87,74,0)}}
+#timeStrip.stale-pulse,#askOut.stale-pulse{animation:stalePulse .9s ease-out 1;border-color:var(--red)!important;background:#2a1e1c}
 .banner{margin:.5rem 0;padding:.5rem .7rem;background:#2a1e1c;border:1px solid #5a3530;color:#f0b4ae;font-size:.75rem}
 #evalPanel img{display:block}
 section{margin-top:1.35rem}
@@ -925,14 +929,10 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   <div>
     <h1>RECEIPTS <span>— video answers that know when they're out of date</span></h1>
     <p class="tagline">Every answer cites its clip. When newer footage contradicts it, the answer changes. When the footage stops, it says so. · <code id="camLabel">sdg_warehouse_cam-2</code></p>
-    <nav class="pages">
-      <a class="on" href="./">Warehouse</a>
-      <a id="browseLink" href="browse/">Browse clips</a>
-    </nav>
   </div>
   <div class="live-ctl">
-    <button type="button" class="demo-btn" id="runDemo" title="key d">Run demo</button>
-    <button type="button" class="demo-btn next" id="demoNext" hidden title="Space / →">Next →</button>
+    <button type="button" class="demo-btn" id="runDemo">Run demo</button>
+    <button type="button" class="demo-btn next" id="demoNext" hidden>Next →</button>
     <label><span class="live-dot" id="liveDot"></span>
       <input type="checkbox" id="liveToggle"/> LIVE
     </label>
@@ -940,6 +940,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   </div>
 </header>
 <main>
+  <div id="winTip">Press Run demo: watch an answer change when new footage arrives, then go stale when the camera stops.</div>
   <div id="demoCaption" hidden></div>
   <div id="timeStrip" class="clock">Answer as of — · evidence — · footage ends —</div>
   <div class="clock"><span id="segLabel">…</span> · scrubber <strong id="asofLabel">—</strong> · coverage <span id="covLabel">—</span></div>
@@ -1116,6 +1117,7 @@ function playClip(clip, {autoplay=true, highlight=null}={}){
   citeRange=highlight;
   const cam=clip.camera_id||meta.camera_id||'sdg_warehouse_cam-2';
   $('playClip').textContent=cam+' · '+shortClip(clip.clip_id);
+  $('playClip').title=clip.clip_id||'';
   $('playRange').textContent=fmt(clip.t_start)+'–'+fmt(clip.t_end)
     +(highlight?(' · cited '+fmt(highlight[0])+'–'+fmt(highlight[1])):'');
   $('playStatus').textContent='loading…';
@@ -1446,13 +1448,13 @@ function renderChangedHero(d){
   const old=hist[hist.length-1];
   el.style.display='block';
   el.innerHTML='<h3>ANSWER CHANGED</h3><div class="hero-cols">'
-    +'<div class="hero-card before" id="heroBefore"><div class="meta">BEFORE</div><div class="val">'+esc(old.value)
+    +'<div class="hero-card before" id="heroBefore" title="'+esc(old.clip_id||'')+'"><div class="meta">BEFORE</div><div class="val">'+esc(old.value)
     +'</div><div class="meta">'+esc(shortClip(old.clip_id))+' · '+fmt(old.t_start)+'–'+fmt(old.t_end)
-    +'</div><div class="meta">[play older clip]</div></div>'
+    +'</div></div>'
     +'<div class="arrow">→</div>'
-    +'<div class="hero-card after" id="heroAfter"><div class="meta">AFTER</div><div class="val">'+esc(d.answer)
+    +'<div class="hero-card after" id="heroAfter" title="'+esc(d.clip_id||'')+'"><div class="meta">AFTER</div><div class="val">'+esc(d.answer)
     +'</div><div class="meta">'+esc(shortClip(d.clip_id))+' · '+esc(d.t_start_fmt)+'–'+esc(d.t_end_fmt)
-    +'</div><div class="meta">[play newer clip]</div></div></div>'
+    +'</div></div></div>'
     +'<p class="hero-note">Replaced because newer footage from the same camera contradicts it.</p>';
   $('heroBefore').onclick=()=>playClip({clip_id:old.clip_id,camera_id:d.camera_id,t_start:old.t_start,t_end:old.t_end},{autoplay:true,highlight:[old.t_start,old.t_end]});
   $('heroAfter').onclick=()=>playClip({clip_id:d.clip_id,camera_id:d.camera_id,t_start:d.t_start,t_end:d.t_end,stream_url:d.stream_url},{autoplay:true,highlight:[d.t_start,d.t_end]});
@@ -1500,7 +1502,7 @@ function buildDemoBeats(){
     {t:tPark, clip:park, mode:'naive',
       caption:'A retrieval-only agent, same captions'},
     {t:tStop, clip:null, mode:'stale',
-      caption:'The camera stops. Ask again at '+fmt(tStop)},
+      caption:'Camera stopped at 07:57:47. Receipts won\'t pretend to know.'},
   ];
 }
 function setDemoCaption(i, text){
@@ -1557,8 +1559,11 @@ async function playDemoBeat(i){
     // Feature agent-qa card only when it returned a real answer (do not scroll to errors).
     if(agentQaOk) setTimeout(()=>demoScrollTo($('agentqa-slot')), 400);
   } else if(beat.mode==='stale'){
-    demoScrollTo($('staleBanner')||$('timeStrip')||$('askOut'));
-    setTimeout(()=>demoScrollTo($('askOut')||$('timeStrip')), 350);
+    const strip=$('timeStrip'), ask=$('askOut');
+    if(strip){ strip.classList.add('stale','stale-pulse'); setTimeout(()=>strip.classList.remove('stale-pulse'),1000); }
+    if(ask){ ask.classList.add('stale-pulse'); setTimeout(()=>ask.classList.remove('stale-pulse'),1000); }
+    demoScrollTo($('staleBanner')||strip||ask);
+    setTimeout(()=>demoScrollTo(ask||strip), 350);
     toast('Demo complete — supersede + stale on the same question');
   }
 }
@@ -1580,6 +1585,7 @@ async function demoNextBeat(){
 }
 async function runDemo(){
   if(!meta.ready) return;
+  const tip=$('winTip'); if(tip) tip.hidden=true;
   clearDemoUi();
   demoBeats=buildDemoBeats();
   demoRunning=true;
@@ -1604,27 +1610,6 @@ document.querySelectorAll('.presets button').forEach(b=>{
   b.addEventListener('click',()=>{ $('q').value=b.dataset.q; doAsk(); });
 });
 
-(function(){
-  var link=document.getElementById('browseLink');
-  if(!link) return;
-  var p=location.pathname;
-  var base=p.endsWith('/') ? p : p.replace(/[^/]*$/, '');
-  if(!base.endsWith('/')) base+='/';
-  link.href=base+'browse/';
-  // Hide Browse if the page or person_moving clip is unavailable.
-  fetch(base+'browse/', {method:'GET'}).then(function(r){
-    if(!r.ok){ link.style.display='none'; return null; }
-    return fetch(base+'browse/api/clips');
-  }).then(function(r){
-    if(!r) return;
-    if(!r.ok){ link.style.display='none'; return null; }
-    return r.json();
-  }).then(function(d){
-    if(!d) return;
-    var ok=(d.clips||[]).some(function(c){ return String(c.clip_id||'').indexOf('person_moving')===0; });
-    if(!ok) link.style.display='none';
-  }).catch(function(){ link.style.display='none'; });
-})();
 setInterval(()=>{ if(meta.ready && !document.hidden) refreshBoard(); }, 2500);
 init();
 setInterval(()=>{ if(!meta.ready) init(); }, 2500);
