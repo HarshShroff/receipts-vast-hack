@@ -12,6 +12,9 @@
 
 Built at the Real-Time Video Agents Hack NYC (VAST Builders Challenge), 2026-10-09.
 
+![How Receipts answers: real claim history, stale after footage ends, vs retrieval-only and the event's VSS agent](docs/how_it_works.png)
+
+
 ![Eval on our own venue footage](eval/out/results_real.png)
 
 ## The problem
