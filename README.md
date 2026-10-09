@@ -53,11 +53,12 @@ What this build actually called:
 
 - **VAST** — DataEngine / VSS retrieval API (login, explore, search, stream), VastDB-backed index, S3 chunk/segment buckets
 - **NVIDIA Cosmos Reason** — segment captions (`reasoning_content`); **Cosmos Embed** — via hybrid search during discovery
+- **YOLO11 detections (VSS pipeline)** — board player overlay via `/api/detections` (normalized boxes synced to `video.currentTime`)
 - **CoreWeave** — GPUs serving the reasoner/embedder (and detector) in the team pipeline
 - **Cursor** — agent + skills for health, retrieval, re-ingest, and deploy-app-no-registry
 - **Weights & Biases** — eval results table and chart logged per run (`eval/compare.py`); example: [run kvzklxkd](https://wandb.ai/harshrofff-na/receipts-vast-hack/runs/kvzklxkd)
 
-YOLO11 (ByteTrack) runs in the local clip viewer (`viewer/`) on our own clips, not in the VAST app path. Not used: W&B inference, Weave tracing.
+Not used: W&B inference, Weave tracing.
 
 ## Evaluation, with caveats
 
@@ -78,7 +79,7 @@ Exact-name entity matching (no entity resolution). Keyword-overlap retrieval in 
 
 ## Stack
 
-NVIDIA Cosmos Reason + Embed / VAST VSS, CoreWeave GPUs, Python 3 + SQLite, Cursor.
+NVIDIA Cosmos Reason + Embed / VAST VSS, YOLO11 detections (VSS pipeline), CoreWeave GPUs, Python 3 + SQLite, Cursor.
 
 License: none yet (all rights reserved by default).
 

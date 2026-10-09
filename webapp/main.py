@@ -844,12 +844,15 @@ main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
 @media (max-width:960px){.stage{grid-template-columns:1fr}}
 .player-wrap{background:#000;border:1px solid var(--line);position:relative}
 #heroVideo{width:100%;display:block;max-height:min(52vh,480px);background:#000;aspect-ratio:16/9;object-fit:contain}
+#detOverlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
 #frameStrip{display:none;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:4px;padding:4px;background:#0a0d0b}
 #frameStrip.show{display:grid}
 #frameStrip img{width:100%;height:100px;object-fit:cover;border:1px solid var(--line)}
-.vbar{display:grid;grid-template-columns:auto 1fr auto auto;gap:.45rem;align-items:center;
+.vbar{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:.45rem;align-items:center;
   padding:.4rem .55rem;background:#0e1210;border:1px solid var(--line);border-top:0;font-size:.72rem}
 .vbar button{background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:.3rem .55rem;cursor:pointer;font:inherit}
+.boxes-toggle{display:inline-flex;align-items:center;gap:.3rem;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
+.boxes-toggle input{accent-color:var(--amber)}
 .vtrack{position:relative;height:10px;background:#243028;cursor:pointer}
 .vfill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);width:0}
 .vcite{position:absolute;top:0;bottom:0;background:rgba(228,87,74,.45);border:1px solid var(--red);pointer-events:none}
@@ -984,6 +987,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
     <div>
       <div class="player-wrap">
         <video id="heroVideo" playsinline autoplay muted></video>
+        <canvas id="detOverlay" aria-hidden="true"></canvas>
         <div id="frameStrip" aria-label="segment frames"></div>
       </div>
       <div class="vbar">
@@ -991,6 +995,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
         <div class="vtrack" id="vTrack"><div class="vfill" id="vFill"></div><div class="vcite" id="vCite" hidden></div></div>
         <span id="vTime">0:00</span>
         <span id="playStatus">ready</span>
+        <label class="boxes-toggle" title="YOLO detection boxes"><input type="checkbox" id="boxesToggle" checked/> boxes</label>
       </div>
       <div class="player-meta">
         <div><strong id="playClip">—</strong></div>
@@ -1039,7 +1044,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   </section>
 </main>
 <div id="toasts"></div>
-<footer>
+<footer id="sponsorFooter">
   <span>Sponsor tools used</span>
   <span class="chip">VAST DataEngine</span>
   <span class="chip">NVIDIA Cosmos Reason</span>
@@ -1052,6 +1057,10 @@ let meta={t_min:0,t_max:1,ready:false,segments:[]};
 let asOf=0;
 let liveOn=false;
 let es=null;
+let detFrames=[];
+let detGen=0;
+let boxesOn=true;
+let yoloLive=false;
 let prevTiles={};
 let currentClipId=null;
 let citeRange=null;
@@ -1114,6 +1123,7 @@ async function showFrames(clipId){
     strip.innerHTML=d.frames.map(u=>'<img src="'+u+'" alt="frame"/>').join('');
     strip.classList.add('show');
     vid.style.display='none';
+    clearDetOverlay();
     $('playStatus').textContent='frame strip (video unavailable)';
   }catch(e){
     strip.classList.remove('show');
@@ -1129,6 +1139,97 @@ function syncCiteBar(highlight, dur){
   cite.style.left='0%';
   cite.style.width='100%';
 }
+function detectionFrameAt(frames, t){
+  if(!frames||!frames.length) return null;
+  let lo=0, hi=frames.length-1;
+  while(lo<hi){
+    const mid=(lo+hi+1)>>1;
+    if(frames[mid].t<=t) lo=mid; else hi=mid-1;
+  }
+  let best=frames[lo];
+  const next=frames[lo+1];
+  if(next && Math.abs(next.t-t)<Math.abs(best.t-t)) best=next;
+  return Math.abs(best.t-t)<=0.5 ? best : null;
+}
+function fitContain(vid){
+  const cw=vid.clientWidth, ch=vid.clientHeight, vw=vid.videoWidth, vh=vid.videoHeight;
+  if(!vw||!vh||!cw||!ch) return null;
+  const scale=Math.min(cw/vw, ch/vh), w=vw*scale, h=vh*scale;
+  return {dx:(cw-w)/2, dy:(ch-h)/2, w, h, cw, ch, vw, vh};
+}
+function markYoloLive(){
+  if(yoloLive) return;
+  yoloLive=true;
+  const foot=$('sponsorFooter');
+  if(foot && !$('yoloChip')){
+    const chip=document.createElement('span');
+    chip.id='yoloChip';
+    chip.className='chip';
+    chip.textContent='YOLO11 detections (VSS pipeline)';
+    foot.appendChild(chip);
+  }
+}
+function clearDetOverlay(){
+  const canvas=$('detOverlay');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+function drawDetections(){
+  const canvas=$('detOverlay'), vid=$('heroVideo');
+  if(!canvas||!vid) return;
+  const dpr=window.devicePixelRatio||1;
+  const cw=vid.clientWidth, ch=vid.clientHeight;
+  if(canvas.width!==Math.round(cw*dpr) || canvas.height!==Math.round(ch*dpr)){
+    canvas.width=Math.round(cw*dpr);
+    canvas.height=Math.round(ch*dpr);
+    canvas.style.width=cw+'px';
+    canvas.style.height=ch+'px';
+  }
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cw,ch);
+  if(!boxesOn || !detFrames.length) return;
+  const f=fitContain(vid);
+  if(!f) return;
+  const fr=detectionFrameAt(detFrames, vid.currentTime||0);
+  if(!fr||!fr.boxes||!fr.boxes.length) return;
+  const amber='#e0a84a';
+  ctx.lineWidth=1.5;
+  ctx.strokeStyle=amber;
+  ctx.font='11px ui-monospace, Menlo, monospace';
+  for(const b of fr.boxes){
+    const nx=b.pixel?b.x/f.vw:b.x, ny=b.pixel?b.y/f.vh:b.y;
+    const nw=b.pixel?b.w/f.vw:b.w, nh=b.pixel?b.h/f.vh:b.h;
+    const x=f.dx+nx*f.w, y=f.dy+ny*f.h, w=nw*f.w, h=nh*f.h;
+    ctx.strokeRect(x,y,w,h);
+    const text=(b.label||'object')+' '+(Number(b.conf||0).toFixed(2));
+    const tw=ctx.measureText(text).width+6, th=14;
+    const ly=y-th<0?y:y-th;
+    ctx.fillStyle=amber;
+    ctx.fillRect(x, ly, tw, th);
+    ctx.fillStyle='#111';
+    ctx.fillText(text, x+3, ly+11);
+  }
+}
+function loadDetections(clipId){
+  // Async only — never awaited by demo beats / ask.
+  const gen=++detGen;
+  detFrames=[];
+  clearDetOverlay();
+  if(!clipId) return;
+  fetch('api/detections?clip_id='+encodeURIComponent(clipId))
+    .then(r=>r.ok?r.json():Promise.reject())
+    .then(d=>{
+      if(gen!==detGen) return;
+      const frames=d&&d.frames?d.frames:[];
+      detFrames=frames;
+      if(frames.length) markYoloLive();
+      drawDetections();
+    })
+    .catch(()=>{ if(gen===detGen){ detFrames=[]; clearDetOverlay(); } });
+}
 function wireVideo(vid){
   if(vid._wired) return;
   vid._wired=true;
@@ -1137,7 +1238,11 @@ function wireVideo(vid){
     $('vFill').style.width=((vid.currentTime/vid.duration)*100)+'%';
     $('vTime').textContent=Math.floor(vid.currentTime)+'s / '+Math.floor(vid.duration)+'s';
     if(!vid.paused) $('playStatus').textContent='playing';
+    drawDetections();
   });
+  vid.addEventListener('seeked', drawDetections);
+  vid.addEventListener('loadeddata', drawDetections);
+  window.addEventListener('resize', drawDetections);
   vid.addEventListener('play',()=>{ $('playStatus').textContent='playing'; $('vPlay').textContent='Pause'; });
   vid.addEventListener('pause',()=>{ if(vid.ended) return; $('playStatus').textContent='paused'; $('vPlay').textContent='Play'; });
   vid.addEventListener('ended',()=>{ $('playStatus').textContent='ended'; $('vPlay').textContent='Replay'; $('vFill').style.width='100%'; });
@@ -1152,6 +1257,8 @@ function wireVideo(vid){
     const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
     if(vid.duration) vid.currentTime=pct*vid.duration;
   };
+  const tog=$('boxesToggle');
+  if(tog) tog.addEventListener('change',()=>{ boxesOn=!!tog.checked; drawDetections(); });
 }
 function playClip(clip, {autoplay=true, highlight=null}={}){
   if(!clip||!clip.clip_id) return;
@@ -1170,16 +1277,18 @@ function playClip(clip, {autoplay=true, highlight=null}={}){
     +(highlight?(' · cited '+fmt(highlight[0])+'–'+fmt(highlight[1])):'');
   $('playStatus').textContent='loading…';
   $('vFill').style.width='0%';
+  loadDetections(clip.clip_id);  // fire-and-forget
   const url=clip.stream_url||('api/clip?clip_id='+encodeURIComponent(clip.clip_id));
   if(vid.dataset.src!==url){
     vid.dataset.src=url;
     vid.src=url;
   }
-  vid.onerror=()=>{ showFrames(clip.clip_id); };
+  vid.onerror=()=>{ showFrames(clip.clip_id); clearDetOverlay(); };
   vid.onloadeddata=()=>{
     syncCiteBar(highlight, vid.duration);
     $('playStatus').textContent=autoplay?'playing':'ready';
     if(autoplay){ vid.play().catch(()=>{}); }
+    drawDetections();
   };
   setTimeout(()=>{
     if(vid.readyState===0 && currentClipId===clip.clip_id){
