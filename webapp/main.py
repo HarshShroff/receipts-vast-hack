@@ -828,6 +828,7 @@ header{padding:.85rem 1.25rem .55rem;display:flex;flex-wrap:wrap;align-items:fle
   border-bottom:1px solid var(--line)}
 header h1{font-family:Syne,sans-serif;font-size:clamp(1.35rem,3.2vw,1.95rem);letter-spacing:.01em;margin:0;line-height:1.05}
 header h1 span{color:var(--accent)}
+header .memory{font-family:Syne,sans-serif;font-size:clamp(1.05rem,2.4vw,1.45rem);font-weight:700;color:#f2f5f1;margin:.45rem 0 0;max-width:48rem;line-height:1.25;letter-spacing:.01em}
 header .tagline{color:var(--muted);font-size:.78rem;margin:.35rem 0 0;max-width:42rem;line-height:1.4}
 .pages{display:flex;gap:.4rem;margin:.55rem 0 0}
 .pages a{border:1px solid var(--accent);padding:.35rem .7rem;color:var(--accent);text-decoration:none;font-size:.78rem;letter-spacing:.06em}
@@ -884,9 +885,11 @@ main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
 .clock{color:var(--muted);font-size:.75rem;margin:.35rem 0 .45rem}
 #timeStrip{font-size:.82rem;letter-spacing:.02em;padding:.45rem .65rem;border:1px solid var(--line);background:var(--panel);margin:.2rem 0 .55rem}
 #timeStrip.stale{background:#2a1e1c;border-color:#5a3530;color:#f0b4ae}
-#demoCaption{display:none;margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--accent);background:#152018;color:var(--fg);font-size:.9rem;letter-spacing:.01em}
+#demoCaption{display:none;margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--accent);background:#152018;color:var(--fg);font-size:.95rem;letter-spacing:.01em;line-height:1.35}
 #demoCaption.show{display:block}
 #demoCaption .beat{color:var(--muted);font-size:.72rem;margin-right:.5rem}
+#demoCaption .line1{color:#f2f5f1;font-weight:600}
+#demoCaption .line2{color:var(--muted);font-size:.82rem;margin-top:.25rem}
 #winTip{margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--line);background:#152018;color:var(--fg);font-size:.88rem;letter-spacing:.01em}
 #winTip[hidden]{display:none!important}
 .naive-card.demo-hl{outline:2px solid var(--accent);outline-offset:2px;background:#1e2a22}
@@ -964,6 +967,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
 <header>
   <div>
     <h1>RECEIPTS <span>— video answers that know when they're out of date</span></h1>
+    <p class="memory">A video agent with memory, that knows when its answers are out of date.</p>
     <p class="tagline">Every answer cites its clip. When newer footage contradicts it, the answer changes. When the footage stops, it says so. · <code id="camLabel">sdg_warehouse_cam-2</code></p>
   </div>
   <div class="live-ctl">
@@ -1702,24 +1706,31 @@ function buildDemoBeats(){
   const tMove=move.t_end;
   const tPark=park.t_end;
   const tStop=Math.ceil((meta.t_max||tPark)+180); // ~08:00:47 when t_max is 07:57:47
-  const camShort='cam-2';
   return [
     {t:tMove, clip:move, mode:'ask',
-      caption:'Q: Is the forklift on '+camShort+' moving? (as of '+fmt(tMove)+')'},
+      line1:'You ask: is the forklift on camera 2 moving? The agent answers "moving" and shows the exact clip it saw.',
+      line2:'Every answer has a receipt: the clip and the time.'},
     {t:tPark, clip:park, mode:'supersede',
-      caption:'Newer footage arrives ('+fmt(tPark)+')'},
+      line1:'New footage arrives: the forklift has parked. The old answer is crossed out, not deleted.',
+      line2:'The agent remembers what it saw and updates when the world changes.'},
     {t:tPark, clip:park, mode:'naive',
-      caption:'A retrieval-only agent, same captions'},
+      line1:'A typical video agent, same footage, still says "moving".',
+      line2:'It found a matching clip but never checked when it was filmed.'},
     {t:tStop, clip:null, mode:'stale',
-      caption:'Camera stopped at 07:57:47. Receipts won\'t pretend to know.'},
+      line1:'The camera stops. Three minutes later you ask again.',
+      line2:'Receipts says: last seen parked at 07:57, no footage since, may be out of date. Knowing it was safe isn\'t knowing it is safe.'},
   ];
 }
-function setDemoCaption(i, text){
+function setDemoCaption(i, beat){
   const el=$('demoCaption');
   if(!el) return;
   el.hidden=false;
   el.classList.add('show');
-  el.innerHTML='<span class="beat">DEMO '+(i+1)+'/'+demoBeats.length+'</span>'+esc(text);
+  const l1=beat.line1||beat.caption||'';
+  const l2=beat.line2||'';
+  el.innerHTML='<span class="beat">DEMO '+(i+1)+'/'+demoBeats.length+'</span>'
+    +'<div class="line1">'+esc(l1)+'</div>'
+    +(l2?'<div class="line2">'+esc(l2)+'</div>':'');
 }
 function clearDemoUi(){
   if(demoAutoTimer){ clearTimeout(demoAutoTimer); demoAutoTimer=null; }
@@ -1747,7 +1758,7 @@ async function playDemoBeat(i){
   const cam=meta.camera_id||'sdg_warehouse_cam-2';
   const q='Is the forklift on '+cam+' moving?';
   $('q').value=q;
-  setDemoCaption(i, beat.caption);
+  setDemoCaption(i, beat);
   const nxt=$('demoNext');
   if(nxt) nxt.hidden=(i>=demoBeats.length-1);
   const slot=$('naive-slot');
