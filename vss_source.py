@@ -1,0 +1,307 @@
+"""VSS ClaimSource: pull warehouse segments and map Cosmos captions to claims.
+
+Auth and base URL come from the environment (same vars the retrieval skills use).
+Never hardcode credentials. Parsing is deterministic keyword mapping; when a
+caption already uses the re-ingest vocabulary (BLOCKED/CLEAR + zone names),
+that path wins so we can swap to re-ingested captions without code changes.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+
+from ingest_adapter import ClaimSource
+
+# Pinned vocabulary so the same real-world slot always gets the same key.
+ZONES = (
+    "left_aisle",
+    "center_aisle",
+    "right_aisle",
+    "loading_area",
+    "wall_area",
+)
+
+# Filename camera-angle → zone when the caption does not name one.
+_ANGLE_ZONE = {
+    "ceiling_00": "center_aisle",
+    "ceiling_01": "center_aisle",
+    "ceiling_02": "left_aisle",
+    "ceiling_03": "right_aisle",
+    "ceiling_04": "loading_area",
+    "eye_00": "wall_area",
+    "eye_01": "center_aisle",
+    "eye_02": "left_aisle",
+    "eye_03": "right_aisle",
+    "eye_04": "wall_area",
+}
+
+_ZONE_PATTERNS = (
+    (r"\bleft\s+aisle\b", "left_aisle"),
+    (r"\bright\s+aisle\b", "right_aisle"),
+    (r"\bcenter\s+aisle\b|\bmiddle\s+aisle\b", "center_aisle"),
+    (r"\bloading\s+(area|dock|bay)\b", "loading_area"),
+    (r"\bwall\s+area\b|\bnear (a |the )?wall\b|\bbrick wall\b", "wall_area"),
+    (r"\bwarehouse aisle\b|\bin an? aisle\b|\baisle\b", "center_aisle"),
+)
+
+
+def _env(*names, default=None):
+    for n in names:
+        v = os.environ.get(n)
+        if v:
+            return v
+    return default
+
+
+def login(backend=None, username=None, password=None):
+    """POST /api/v1/auth/login → bearer token. Reads INGRESS_URL / USERNAME / PASSWORD."""
+    backend = (backend or _env("INGRESS_URL", "VSS_URL") or "").rstrip("/")
+    username = username or _env("USERNAME", "VSS_USERNAME")
+    password = password or _env("PASSWORD", "VSS_PASSWORD")
+    if not backend or not username or not password:
+        raise RuntimeError("need INGRESS_URL/VSS_URL and USERNAME/PASSWORD (or VSS_*) in env")
+    body = json.dumps({"username": username, "password": password}).encode()
+    req = urllib.request.Request(
+        f"{backend}/api/v1/auth/login",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read().decode())
+    token = data.get("access_token")
+    if not token:
+        raise RuntimeError("login response missing access_token")
+    return backend, token
+
+
+def _get_json(backend, token, path, params=None):
+    url = f"{backend}{path}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return json.loads(resp.read().decode())
+
+
+def _post_json(backend, token, path, payload):
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{backend}{path}",
+        data=body,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return json.loads(resp.read().decode())
+
+
+def filename_timestamp_seconds(name_or_uri):
+    """Parse leading YYYYMMDD_HHMMSS from a chunk/segment filename → seconds since midnight UTC day."""
+    base = str(name_or_uri).rstrip("/").split("/")[-1]
+    m = re.match(r"(\d{8})_(\d{6})", base)
+    if not m:
+        return None
+    hh, mm, ss = int(m.group(2)[0:2]), int(m.group(2)[2:4]), int(m.group(2)[4:6])
+    return hh * 3600 + mm * 60 + ss
+
+
+def angle_from_name(name_or_uri):
+    base = str(name_or_uri).lower()
+    m = re.search(r"(ceiling_\d+|eye_\d+)", base)
+    return m.group(1) if m else None
+
+
+def pin_zone(caption, name_or_uri=""):
+    """Return a ZONES member. Prefer caption vocabulary; else filename angle; else center_aisle."""
+    text = caption or ""
+    low = text.lower()
+    for pat, zone in _ZONE_PATTERNS:
+        if re.search(pat, low):
+            return zone
+    angle = angle_from_name(name_or_uri)
+    if angle and angle in _ANGLE_ZONE:
+        return _ANGLE_ZONE[angle]
+    return "center_aisle"
+
+
+def _blocker(caption):
+    low = (caption or "").lower()
+    if re.search(r"\bforklift\b", low):
+        return "forklift"
+    if re.search(r"\bpallet\b", low):
+        return "pallet"
+    if re.search(r"\bperson\b|\bpeople\b|\bworker\b", low):
+        return "person"
+    return "none"
+
+
+def _forklift_motion(caption):
+    low = (caption or "").lower()
+    if not re.search(r"\bforklift\b", low):
+        return "absent"
+    if re.search(r"\b(reverses?|moving away|moves away|leaves?|leaving|drives? away)\b", low):
+        return "leaving"
+    if re.search(r"\b(moving|moves|approaching|drives?|driving|traveling|rolls?)\b", low):
+        return "moving"
+    if re.search(r"\b(stationary|parked|remains stationary)\b", low):
+        return "parked"
+    return "present"
+
+
+def caption_blocked_value(caption):
+    """Return (blocked_yes_no_detail, confidence) from a Cosmos caption.
+
+    Prefers explicit BLOCKED/CLEAR (re-ingest prompt). Falls back to forklift
+    presence / motion keywords on the stock warehouse captions.
+    """
+    text = caption or ""
+    upper = text.upper()
+    # Structured re-ingest path
+    if re.search(r"\bBLOCKED\b", upper) and not re.search(r"\bCLEAR\b", upper):
+        by = _blocker(text)
+        detail = f"yes (by {by})" if by != "none" else "yes"
+        return detail, 0.9
+    if re.search(r"\bCLEAR\b", upper) and not re.search(r"\bBLOCKED\b", upper):
+        return "no", 0.9
+    if re.search(r"\bBLOCKED\b", upper) and re.search(r"\bCLEAR\b", upper):
+        # both mentioned: take the last one
+        bi, ci = upper.rfind("BLOCKED"), upper.rfind("CLEAR")
+        if bi > ci:
+            by = _blocker(text)
+            return (f"yes (by {by})" if by != "none" else "yes"), 0.85
+        return "no", 0.85
+
+    # Keyword fallback on existing captions
+    motion = _forklift_motion(text)
+    by = _blocker(text)
+    # Forklift leaving / reversing out → aisle clearing (state change for SUPERSEDE)
+    if motion == "leaving":
+        return "no", 0.7
+    if motion == "absent" and by in ("none", "person"):
+        if by == "none" or re.search(r"\bempty\b", text.lower()):
+            return "no", 0.7
+    if by == "forklift" or motion in ("moving", "parked", "present"):
+        return "yes (by forklift)", 0.75
+    if by == "pallet":
+        return "yes (by pallet)", 0.75
+    if by == "person" and re.search(r"\b(stands?|standing|near)\b", text.lower()):
+        return "yes (by person)", 0.55
+    if re.search(r"\bempty warehouse\b|\bdevoid of\b|\bno (other )?(workers|forklifts|activity)\b", text.lower()):
+        return "no", 0.65
+    return None, 0.0
+
+
+def caption_to_claims(caption, *, camera_id, source_uri, t_start, t_end, observed_at=None):
+    """Map one segment caption → claim dicts (absolute times; relative=False)."""
+    zone = pin_zone(caption, source_uri)
+    value, conf = caption_blocked_value(caption)
+    if value is None:
+        return []
+    obs = observed_at if observed_at is not None else t_end
+    claims = [{
+        "entity": zone,
+        "attribute": "blocked",
+        "value": value,
+        "location": camera_id,
+        "t_start": float(t_start),
+        "t_end": float(t_end),
+        "observed_at": float(obs),
+        "confidence": conf,
+    }]
+    # Optional motion claim (same camera) — helps demo SUPERSEDE when obstruction stays yes
+    motion = _forklift_motion(caption)
+    if motion != "absent":
+        claims.append({
+            "entity": "forklift",
+            "attribute": "motion",
+            "value": motion,
+            "location": camera_id,
+            "t_start": float(t_start),
+            "t_end": float(t_end),
+            "observed_at": float(obs),
+            "confidence": min(conf, 0.8),
+        })
+    return claims
+
+
+def segments_from_explore(payload, *, camera_id="sdg_warehouse_cam-2", location="warehouse3"):
+    """Flatten explore JSON into segment dicts sorted by absolute time."""
+    out = []
+    for chunk in payload.get("chunks") or []:
+        if camera_id and chunk.get("camera_id") and chunk.get("camera_id") != camera_id:
+            continue
+        if location and chunk.get("location") and chunk.get("location") != location:
+            continue
+        ov = chunk.get("original_video") or ""
+        base_t = filename_timestamp_seconds(ov) or filename_timestamp_seconds(chunk.get("filename") or "")
+        if base_t is None:
+            # fall back to upload_timestamp clock seconds-of-day
+            ut = chunk.get("upload_timestamp") or ""
+            try:
+                dt = datetime.fromisoformat(ut.replace("Z", "+00:00"))
+                base_t = dt.hour * 3600 + dt.minute * 60 + dt.second
+            except ValueError:
+                base_t = 0.0
+        for seg in chunk.get("timeline") or []:
+            src = seg.get("source") or chunk.get("preview_source") or ov
+            s0 = float(seg.get("segment_start_sec") or 0.0)
+            s1 = float(seg.get("segment_end_sec") or s0)
+            abs0, abs1 = base_t + s0, base_t + s1
+            out.append({
+                "clip_id": src.split("/")[-1] if src else f"{ov}_{s0}_{s1}",
+                "path": src,
+                "original_video": ov,
+                "camera_id": chunk.get("camera_id") or camera_id,
+                "location_meta": chunk.get("location") or location,
+                "caption": seg.get("reasoning_content") or "",
+                "description": seg.get("reasoning_content") or "",
+                "t_start": abs0,
+                "t_end": abs1,
+                "segment_start_sec": s0,
+                "segment_end_sec": s1,
+            })
+    out.sort(key=lambda s: (s["t_start"], s["t_end"], s["clip_id"]))
+    return out
+
+
+def fetch_warehouse_segments(backend=None, token=None, *, camera_id="sdg_warehouse_cam-2",
+                             location="warehouse3", limit=100):
+    """Login if needed, GET /api/v1/videos/explore, return sorted segment dicts."""
+    if not token:
+        backend, token = login(backend)
+    else:
+        backend = (backend or _env("INGRESS_URL", "VSS_URL") or "").rstrip("/")
+    payload = _get_json(backend, token, "/api/v1/videos/explore",
+                        {"scope": "all", "limit": limit, "offset": 0, "location": location})
+    return segments_from_explore(payload, camera_id=camera_id, location=location), backend, token
+
+
+class VssSource(ClaimSource):
+    """ClaimSource over a clip dict that already carries a Cosmos caption.
+
+    Use with clips produced by fetch_warehouse_segments / segments_from_explore.
+    Times on claims are absolute (relative=False).
+    """
+    relative = False
+    source = "vss_cosmos"
+
+    def __init__(self, camera_id="sdg_warehouse_cam-2"):
+        self.camera_id = camera_id
+
+    def extract(self, clip):
+        caption = clip.get("caption") or clip.get("description") or ""
+        camera = clip.get("camera_id") or self.camera_id
+        uri = clip.get("path") or clip.get("original_video") or clip.get("clip_id") or ""
+        return caption_to_claims(
+            caption,
+            camera_id=camera,
+            source_uri=uri,
+            t_start=clip["t_start"],
+            t_end=clip["t_end"],
+        )
