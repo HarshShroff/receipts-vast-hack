@@ -1,0 +1,60 @@
+{
+  "_label": "Only the man in the gray hoodie in clips/person_moving.mp4. Positions are from a second 2 fps pass on 2026-10-09. He is left of the pillar at 0-1s, hidden at 1.5s, right at 2.5-3s, hidden at 3.5s, left at 4.5-5.5s, hidden at 6-6.5s, and right again from 7s. Question times sit on the stable frames, not the crossings. Cosmos and YOLO were not used as labels. Clip clock is 12:03:00-12:03:09.",
+  "questions": [
+    {
+      "id": "r01",
+      "question": "Where in the frame is the man in the gray hoodie?",
+      "question_key": ["gray_hoodie", "position", "center_pillar"],
+      "as_of": "12:03:00.5",
+      "expected_answer": "left of the center pillar",
+      "expected_clip_id": "person_moving",
+      "expected_interval": ["12:03:00", "12:03:01"],
+      "expected_stale": false,
+      "category": "person-position"
+    },
+    {
+      "id": "r02",
+      "question": "Where in the frame is the man in the gray hoodie?",
+      "question_key": ["gray_hoodie", "position", "center_pillar"],
+      "as_of": "12:03:03",
+      "expected_answer": "right of the center pillar",
+      "expected_clip_id": "person_moving",
+      "expected_interval": ["12:03:02.5", "12:03:03.2"],
+      "expected_stale": false,
+      "category": "person-position"
+    },
+    {
+      "id": "r03",
+      "question": "Where in the frame is the man in the gray hoodie?",
+      "question_key": ["gray_hoodie", "position", "center_pillar"],
+      "as_of": "12:03:05.5",
+      "expected_answer": "left of the center pillar",
+      "expected_clip_id": "person_moving",
+      "expected_interval": ["12:03:04.5", "12:03:06"],
+      "expected_stale": false,
+      "category": "person-position"
+    },
+    {
+      "id": "r04",
+      "question": "Where in the frame is the man in the gray hoodie?",
+      "question_key": ["gray_hoodie", "position", "center_pillar"],
+      "as_of": "12:03:06.5",
+      "expected_answer": "behind the center pillar",
+      "expected_clip_id": "person_moving",
+      "expected_interval": ["12:03:06", "12:03:07"],
+      "expected_stale": false,
+      "category": "person-position"
+    },
+    {
+      "id": "r05",
+      "question": "Where in the frame is the man in the gray hoodie?",
+      "question_key": ["gray_hoodie", "position", "center_pillar"],
+      "as_of": "12:03:08",
+      "expected_answer": "right of the center pillar",
+      "expected_clip_id": "person_moving",
+      "expected_interval": ["12:03:07", "12:03:08.6"],
+      "expected_stale": false,
+      "category": "person-position"
+    }
+  ]
+}

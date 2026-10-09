@@ -1,0 +1,522 @@
+{
+  "questions": "questions_real.json",
+  "notes": [
+    "store: eye-checked intervals in receipts.db",
+    "claims are the eye-checked position intervals, so Receipts is scored on those labels",
+    "LLM captions are those same eye-checked sentences, one per interval",
+    "W&B inference failed: HTTPError",
+    "W&B inference failed: HTTPError",
+    "W&B inference failed: HTTPError",
+    "W&B inference failed: HTTPError",
+    "W&B inference failed: HTTPError"
+  ],
+  "summaries": {
+    "Receipts (supersession)": {
+      "n": 5,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 5,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0
+    },
+    "B1 no-memory (latest clip)": {
+      "n": 5,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 5,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0
+    },
+    "B2 RAG-all (ties->oldest)": {
+      "n": 5,
+      "exact": 2,
+      "cited_in_interval": 1,
+      "answered": 5,
+      "stale_claim": 4,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0
+    },
+    "B2 RAG-all (ties->newest)": {
+      "n": 5,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 5,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0
+    },
+    "B3 last-2-clips window": {
+      "n": 5,
+      "exact": 5,
+      "cited_in_interval": 5,
+      "answered": 5,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0
+    },
+    "VSS agent-qa": {
+      "n": 5,
+      "exact": 0,
+      "cited_in_interval": 0,
+      "answered": 0,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0
+    },
+    "LLM-over-captions (wandb)": {
+      "n": 5,
+      "exact": 0,
+      "cited_in_interval": 0,
+      "answered": 0,
+      "stale_claim": 0,
+      "stale_flag_ok": 5,
+      "after_footage_n": 0,
+      "after_footage_correct_stale": 0,
+      "model_id": "wandb"
+    }
+  },
+  "per_question": {
+    "Receipts (supersession)": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": "behind the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B1 no-memory (latest clip)": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": "behind the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B2 RAG-all (ties->oldest)": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": "left of the center pillar",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B2 RAG-all (ties->newest)": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": "behind the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "B3 last-2-clips window": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": "left of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": "behind the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": "right of the center pillar",
+        "exact": true,
+        "cited_time_s": null,
+        "cited_in_interval": true,
+        "time_restricted": null,
+        "model_id": null,
+        "note": null,
+        "stale": false
+      }
+    ],
+    "VSS agent-qa": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": false,
+        "model_id": null,
+        "note": "agent-qa HTTP 500; person_moving.mp4 is not in the index and the call was not time-restricted; agent-qa has no as_of cutoff; evidence was not time-restricted",
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": false,
+        "model_id": null,
+        "note": "agent-qa HTTP 500; person_moving.mp4 is not in the index and the call was not time-restricted; agent-qa has no as_of cutoff; evidence was not time-restricted",
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": false,
+        "model_id": null,
+        "note": "agent-qa HTTP 500; person_moving.mp4 is not in the index and the call was not time-restricted; agent-qa has no as_of cutoff; evidence was not time-restricted",
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": false,
+        "model_id": null,
+        "note": "agent-qa HTTP 500; person_moving.mp4 is not in the index and the call was not time-restricted; agent-qa has no as_of cutoff; evidence was not time-restricted",
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": false,
+        "model_id": null,
+        "note": "agent-qa HTTP 500; person_moving.mp4 is not in the index and the call was not time-restricted; agent-qa has no as_of cutoff; evidence was not time-restricted",
+        "stale": false
+      }
+    ],
+    "LLM-over-captions (wandb)": [
+      {
+        "id": "r01",
+        "expected": "left of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "wandb",
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r02",
+        "expected": "right of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "wandb",
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r03",
+        "expected": "left of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "wandb",
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r04",
+        "expected": "behind the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "wandb",
+        "note": null,
+        "stale": false
+      },
+      {
+        "id": "r05",
+        "expected": "right of the center pillar",
+        "answer": null,
+        "exact": false,
+        "cited_time_s": null,
+        "cited_in_interval": false,
+        "time_restricted": true,
+        "model_id": "wandb",
+        "note": null,
+        "stale": false
+      }
+    ]
+  }
+}

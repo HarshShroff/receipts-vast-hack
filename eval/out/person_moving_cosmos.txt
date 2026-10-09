@@ -1,0 +1,29 @@
+[
+  {
+    "entity": "man_in_gray_sweatshirt",
+    "attribute": "posture",
+    "value": "standing",
+    "location": "center_pillar",
+    "t_start": 0.0,
+    "t_end": 8.5,
+    "confidence": 0.95
+  },
+  {
+    "entity": "man_in_gray_sweatshirt",
+    "attribute": "motion",
+    "value": "standing still",
+    "location": "center_pillar",
+    "t_start": 0.0,
+    "t_end": 8.5,
+    "confidence": 0.95
+  },
+  {
+    "entity": "man_in_gray_sweatshirt",
+    "attribute": "position",
+    "value": "center_pillar",
+    "location": "center_pillar",
+    "t_start": 0.0,
+    "t_end": 8.5,
+    "confidence": 0.95
+  }
+]

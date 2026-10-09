@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "perception_ok": true,
+  "perception_json": {
+    "source": "yolo11_coco",
+    "frames": null,
+    "object_classes": [
+      "bottle",
+      "chair",
+      "cup",
+      "person",
+      "tv"
+    ],
+    "object_counts": {
+      "person": 184,
+      "chair": 114,
+      "tv": 66,
+      "cup": 54,
+      "bottle": 3
+    },
+    "max_detection_conf": 0.9222,
+    "frame_count": 35,
+    "detection_count": 421
+  },
+  "object_classes": [
+    "bottle",
+    "chair",
+    "cup",
+    "person",
+    "tv"
+  ],
+  "object_counts": {
+    "person": 184,
+    "chair": 114,
+    "tv": 66,
+    "cup": 54,
+    "bottle": 3
+  },
+  "max_detection_conf": 0.9222
+}
