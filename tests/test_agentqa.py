@@ -41,6 +41,17 @@ class AgentQaTest(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertNotIn("answer", out)
 
+    def test_ask_500_falls_back_to_search_and_answer(self):
+        err = urllib.error.HTTPError("http://x", 500, "boom", None, None)
+        with mock.patch.object(agentqa, "login", return_value=("http://x", "t")), \
+             mock.patch.object(agentqa, "_post_json", side_effect=[err, PAYLOAD]) as post:
+            out = agentqa.agentqa_answer("Is the forklift moving?")
+        self.assertTrue(out["ok"])
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args_list[0].args[2], "/api/v1/agent/ask")
+        self.assertEqual(post.call_args_list[1].args[2], "/api/v1/agent/search-and-answer")
+        self.assertEqual(post.call_args_list[1].args[3]["query"], "Is the forklift moving?")
+
 
 if __name__ == "__main__":
     unittest.main()

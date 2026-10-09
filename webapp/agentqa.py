@@ -1,9 +1,9 @@
 """The event's own VSS agent (agent-qa) as a live comparison card.
 
-Calls POST /api/v1/agent/ask on the team VSS with the server-side login the board
-already uses. agent-qa has no as_of cutoff, so it searches the whole archive; we show
-its answer, its top evidence segment and time, and say plainly that it is not
-time-restricted. Results are cached per question so the demo does not hammer VSS.
+Uses the retrieval/agent-qa skill endpoints. Prefer POST /api/v1/agent/ask
+({"question","top_k"}); if that fails, fall back to POST
+/api/v1/agent/search-and-answer ({"query","top_k"}) which is the same skill's
+filterable path. agent-qa has no as_of cutoff. Results are cached per question.
 """
 import time
 import urllib.error
@@ -14,6 +14,10 @@ _CACHE = {}
 _TTL_S = 600
 
 
+def clear_cache():
+    _CACHE.clear()
+
+
 def _evidence_rows(data):
     ev = data.get("evidence") or []
     if isinstance(ev, dict):
@@ -21,7 +25,21 @@ def _evidence_rows(data):
     return ev if isinstance(ev, list) else []
 
 
-def agentqa_answer(question, top_k=8):
+def _call_agent(backend, token, question, top_k):
+    """Skill: ask first (question+top_k), then search-and-answer (query+top_k)."""
+    try:
+        return _post_json(
+            backend, token, "/api/v1/agent/ask",
+            {"question": question, "top_k": top_k},
+        )
+    except urllib.error.HTTPError:
+        return _post_json(
+            backend, token, "/api/v1/agent/search-and-answer",
+            {"query": question, "top_k": top_k},
+        )
+
+
+def agentqa_answer(question, top_k=10):
     q = (question or "").strip()
     if not q:
         return {"ok": False, "error": "empty question"}
@@ -30,7 +48,7 @@ def agentqa_answer(question, top_k=8):
         return hit[1]
     try:
         backend, token = login()
-        data = _post_json(backend, token, "/api/v1/agent/ask", {"question": q, "top_k": top_k})
+        data = _call_agent(backend, token, q, top_k)
     except urllib.error.HTTPError as e:
         out = {"ok": False, "error": f"agent-qa HTTP {e.code}"}
         _CACHE[q] = (time.time(), out)
@@ -50,9 +68,14 @@ def agentqa_answer(question, top_k=8):
     except Exception:
         abs_t = None
     synth = data.get("llm_synthesis")
+    answer = data.get("answer")
+    if not answer:
+        out = {"ok": False, "error": "agent-qa returned empty answer"}
+        _CACHE[q] = (time.time(), out)
+        return out
     out = {
         "ok": True,
-        "answer": data.get("answer"),
+        "answer": answer,
         "evidence_source": src,
         "evidence_start_s": t0,
         "evidence_end_s": t1,
@@ -60,6 +83,7 @@ def agentqa_answer(question, top_k=8):
         "n_evidence": len(rows),
         "model_id": synth.get("model") if isinstance(synth, dict) else None,
         "time_restricted": False,
+        "tool_used": data.get("tool_used"),
         "label": "Event VSS agent (agent-qa): searches the whole archive, no as_of cutoff",
     }
     _CACHE[q] = (time.time(), out)
