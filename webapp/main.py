@@ -1373,8 +1373,7 @@ async function doAsk(opts){
   const seq=++askSeq;
   const wantAgentQa=opts.agentQa!==false;
   // Never let a prior agent-qa hold the beat's /api/ask behind it.
-  if(wantAgentQa) abortAgentQa();
-  else abortAgentQa();
+  abortAgentQa();
   const r=await fetch('api/ask?q='+encodeURIComponent(q)+'&as_of='+encodeURIComponent(asOf));
   const d=await r.json();
   if(seq!==askSeq) return d;  // superseded by a newer ask
@@ -1456,6 +1455,7 @@ async function renderNaive(q, receipts){
 }
 
 let agentQaOk=false;  // only feature in demo scroll when live agent-qa returns ok:true
+let agentQaGen=0;
 function plainAgentText(s){
   let t=String(s||'');
   t=t.replace(/\*\*([^*]+)\*\*/g,'$1');
@@ -1467,14 +1467,19 @@ function plainAgentText(s){
 async function renderAgentQa(q){
   const slot=$('agentqa-slot');
   if(!slot) return;
+  abortAgentQa();
+  const gen=++agentQaGen;
   slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">Asking…</p></div>';
   try{
     const ctrl=AbortController?new AbortController():null;
+    agentQaCtrl=ctrl;
     const timer=ctrl?setTimeout(()=>ctrl.abort(),10000):null;
     const r=await fetch('api/agentqa?q='+encodeURIComponent(q), ctrl?{signal:ctrl.signal}:{});
     if(timer) clearTimeout(timer);
+    if(gen!==agentQaGen) return;
     if(!r.ok){ agentQaOk=false; slot.innerHTML=''; return; }
     const n=await r.json();
+    if(gen!==agentQaGen) return;
     if(!n.ok){ agentQaOk=false; slot.innerHTML=''; return; }
     agentQaOk=true;
     const ans=plainAgentText((n.answer==null||n.answer==='')?'(empty)':String(n.answer));
@@ -1494,8 +1499,11 @@ async function renderAgentQa(q){
     const more=$('agentqaMore'), lead=$('agentqaLead');
     if(more&&lead) more.onclick=()=>{ lead.classList.toggle('expanded'); more.textContent=lead.classList.contains('expanded')?'less':'more'; };
   }catch(e){
+    if(gen!==agentQaGen) return;
     agentQaOk=false;
     slot.innerHTML='';
+  }finally{
+    if(gen===agentQaGen) agentQaCtrl=null;
   }
 }
 
@@ -1593,12 +1601,16 @@ async function playDemoBeat(i){
   demoIdx=i;
   const beat=demoBeats[i];
   const cam=meta.camera_id||'sdg_warehouse_cam-2';
-  $('q').value='Is the forklift on '+cam+' moving?';
+  const q='Is the forklift on '+cam+' moving?';
+  $('q').value=q;
   setDemoCaption(i, beat.caption);
   const nxt=$('demoNext');
   if(nxt) nxt.hidden=(i>=demoBeats.length-1);
   const slot=$('naive-slot');
   if(slot) slot.classList.remove('demo-hl');
+  // Cancel any in-flight agent-qa so it cannot starve /api/ask or /api/board.
+  abortAgentQa();
+  agentQaGen++;
   const sl=$('scrub');
   const t=Math.round(Number(beat.t));
   // Critical: raise max then set asOf from t (not from a clamped range readback).
@@ -1607,15 +1619,19 @@ async function playDemoBeat(i){
   sl.value=t;
   $('asofLabel').textContent=fmt(asOf);
   updateScrubNoFootage();
+  // Paint strip immediately so scrubber/strip never diverge while asks are in flight.
+  const stripEarly=$('timeStrip');
+  if(stripEarly){
+    stripEarly.textContent='Answer as of '+fmt(asOf)+' · evidence — · footage ends '+fmt(meta.t_max);
+    stripEarly.classList.toggle('stale', beat.mode==='stale');
+  }
   await refreshBoard();
-  let d=await doAsk();
+  // agentQa:false — answer/tiles/strip first; fill agent-qa only after the beat paints.
+  let d=await doAsk({asOf:t, agentQa:false});
   // Beat 4 must land STALE at as_of past footage end — re-query if needed.
   if(beat.mode==='stale'){
     if(!d||!d.stale){
-      asOf=t;
-      sl.max=Math.max(Number(sl.max), t);
-      sl.value=t;
-      d=await doAsk();
+      d=await doAsk({asOf:t, agentQa:false});
     }
     if(d&&d.stale){
       const strip=$('timeStrip'), ask=$('askOut');
@@ -1627,6 +1643,8 @@ async function playDemoBeat(i){
     } else {
       toast('Beat 4: expected STALE at '+fmt(t)+' — check /api/ask?as_of='+t);
     }
+    // agent-qa after STALE is painted — never before.
+    setTimeout(()=>renderAgentQa(q), 0);
     return;
   }
   if(beat.mode==='ask' && beat.clip){
@@ -1644,8 +1662,12 @@ async function playDemoBeat(i){
     if(beat.mode==='supersede') demoScrollTo($('changedHero')||$('heroVideo'));
   } else if(beat.mode==='naive'){
     demoScrollTo(slot||$('naive-slot'));
-    if(agentQaOk) setTimeout(()=>demoScrollTo($('agentqa-slot')), 400);
   }
+  // Fill agent-qa only after answer/tiles/strip for this beat are on screen.
+  setTimeout(()=>{
+    renderAgentQa(q);
+    if(beat.mode==='naive') setTimeout(()=>{ if(agentQaOk) demoScrollTo($('agentqa-slot')); }, 400);
+  }, 0);
 }
 function scheduleDemoAuto(){
   if(demoAutoTimer) clearTimeout(demoAutoTimer);
