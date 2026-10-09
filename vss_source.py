@@ -131,7 +131,12 @@ def pin_zone(caption, name_or_uri=""):
 
 
 def _blocker(caption):
+    """Optional 'by X' detail when the caption already made an explicit blocked claim."""
     low = (caption or "").lower()
+    # Prefer "blocked/obstructed by <noun>"
+    m = re.search(r"\b(?:blocked|obstructed|obstruction)\s+by\s+(\w+)", low)
+    if m and m.group(1) in ("forklift", "pallet", "person", "people", "worker"):
+        return "person" if m.group(1) in ("people", "worker") else m.group(1)
     if re.search(r"\bforklift\b", low):
         return "forklift"
     if re.search(r"\bpallet\b", low):
@@ -141,70 +146,60 @@ def _blocker(caption):
     return "none"
 
 
-def _forklift_motion(caption):
-    low = (caption or "").lower()
-    if not re.search(r"\bforklift\b", low):
-        return "absent"
-    if re.search(r"\b(reverses?|moving away|moves away|leaves?|leaving|drives? away)\b", low):
-        return "leaving"
-    if re.search(r"\b(moving|moves|approaching|drives?|driving|traveling|rolls?)\b", low):
-        return "moving"
-    if re.search(r"\b(stationary|parked|remains stationary)\b", low):
-        return "parked"
-    return "present"
+# Explicit obstruction language only. Avoids "clearly", bare forklift presence, etc.
+_BLOCKED_RE = re.compile(
+    r"\b(?:blocked|obstructed|obstruction)\b"
+    r"|\bblocking\b.{0,48}\b(?:aisle|zone|path|area|exit|passage)\b"
+    r"|\b(?:aisle|zone|path|area|exit|passage)\b.{0,48}\bblocking\b",
+    re.I,
+)
+_CLEAR_RE = re.compile(
+    r"\bunobstructed\b"
+    r"|\b(?:is|are|appears?|remains?|looks?)\s+clear\b"
+    r"|\bclear\s+(?:of\b|aisle\b|zone\b|path\b|area\b)"
+    r"|\bstatus:\s*clear\b",
+    re.I,
+)
 
 
 def caption_blocked_value(caption):
-    """Return (blocked_yes_no_detail, confidence) from a Cosmos caption.
+    """Return (blocked_yes_no_detail, confidence) or (None, 0) if not explicit.
 
-    Prefers explicit BLOCKED/CLEAR (re-ingest prompt). Falls back to forklift
-    presence / motion keywords on the stock warehouse captions.
+    Emits a claim only when the caption states the aisle/zone is blocked/obstructed
+    or clear/unobstructed. Vague forklift/person presence is skipped (no guessing).
     """
     text = caption or ""
-    upper = text.upper()
-    # Structured re-ingest path
-    if re.search(r"\bBLOCKED\b", upper) and not re.search(r"\bCLEAR\b", upper):
-        by = _blocker(text)
-        detail = f"yes (by {by})" if by != "none" else "yes"
-        return detail, 0.9
-    if re.search(r"\bCLEAR\b", upper) and not re.search(r"\bBLOCKED\b", upper):
-        return "no", 0.9
-    if re.search(r"\bBLOCKED\b", upper) and re.search(r"\bCLEAR\b", upper):
-        # both mentioned: take the last one
-        bi, ci = upper.rfind("BLOCKED"), upper.rfind("CLEAR")
-        if bi > ci:
-            by = _blocker(text)
-            return (f"yes (by {by})" if by != "none" else "yes"), 0.85
-        return "no", 0.85
+    if not text.strip():
+        return None, 0.0
 
-    # Keyword fallback on existing captions
-    motion = _forklift_motion(text)
+    # Token forms from the re-ingest prompt (avoid matching "clearly").
+    token_blocked = list(re.finditer(r"(?<![A-Za-z])BLOCKED(?![A-Za-z])", text))
+    token_clear = list(re.finditer(r"(?<![A-Za-z])CLEAR(?![A-Za-z])", text))
+    positions = ([(m.start(), "blocked") for m in _BLOCKED_RE.finditer(text)]
+                 + [(m.start(), "clear") for m in _CLEAR_RE.finditer(text)]
+                 + [(m.start(), "blocked") for m in token_blocked]
+                 + [(m.start(), "clear") for m in token_clear])
+    if not positions:
+        return None, 0.0
+
+    positions.sort()
+    winner = positions[-1][1]
+    if winner == "clear":
+        return "no", 0.9 if len(positions) == 1 else 0.85
     by = _blocker(text)
-    # Forklift leaving / reversing out → aisle clearing (state change for SUPERSEDE)
-    if motion == "leaving":
-        return "no", 0.7
-    if motion == "absent" and by in ("none", "person"):
-        if by == "none" or re.search(r"\bempty\b", text.lower()):
-            return "no", 0.7
-    if by == "forklift" or motion in ("moving", "parked", "present"):
-        return "yes (by forklift)", 0.75
-    if by == "pallet":
-        return "yes (by pallet)", 0.75
-    if by == "person" and re.search(r"\b(stands?|standing|near)\b", text.lower()):
-        return "yes (by person)", 0.55
-    if re.search(r"\bempty warehouse\b|\bdevoid of\b|\bno (other )?(workers|forklifts|activity)\b", text.lower()):
-        return "no", 0.65
-    return None, 0.0
-
+    return (f"yes (by {by})" if by != "none" else "yes"), 0.9 if len(positions) == 1 else 0.85
 
 def caption_to_claims(caption, *, camera_id, source_uri, t_start, t_end, observed_at=None):
-    """Map one segment caption → claim dicts (absolute times; relative=False)."""
-    zone = pin_zone(caption, source_uri)
+    """Map one segment caption → blocked claim dicts (absolute times; relative=False).
+
+    Skips captions without explicit blocked/clear language. No motion side-claims.
+    """
     value, conf = caption_blocked_value(caption)
     if value is None:
         return []
+    zone = pin_zone(caption, source_uri)
     obs = observed_at if observed_at is not None else t_end
-    claims = [{
+    return [{
         "entity": zone,
         "attribute": "blocked",
         "value": value,
@@ -214,20 +209,6 @@ def caption_to_claims(caption, *, camera_id, source_uri, t_start, t_end, observe
         "observed_at": float(obs),
         "confidence": conf,
     }]
-    # Optional motion claim (same camera) — helps demo SUPERSEDE when obstruction stays yes
-    motion = _forklift_motion(caption)
-    if motion != "absent":
-        claims.append({
-            "entity": "forklift",
-            "attribute": "motion",
-            "value": motion,
-            "location": camera_id,
-            "t_start": float(t_start),
-            "t_end": float(t_end),
-            "observed_at": float(obs),
-            "confidence": min(conf, 0.8),
-        })
-    return claims
 
 
 def segments_from_explore(payload, *, camera_id="sdg_warehouse_cam-2", location="warehouse3"):
