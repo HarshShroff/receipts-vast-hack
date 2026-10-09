@@ -7,3 +7,5 @@ Context from scanning all team apps at 1:58 PM: 24 of 50 deployed. Several teams
 3. EVAL panel (small, below the timeline): show eval/out/results_real.png (copy it to webapp/static or inline as base64) with the caption: "Own footage filmed at the venue today, 6 hand-labeled questions. Same claims for every system, so this isolates time handling. After the camera stopped, the 4 baselines answered with confidence; Receipts flagged stale." Link to eval/questions_real.json in the repo.
 4. Footer sponsor chips: keep only what actually ran in this app. If W&B is not wired by freeze time, do not show it.
 Do not add new features beyond these. Commit + push + redeploy.
+
+UPDATE 2:10 PM: W&B is real now. The eval is logged at https://wandb.ai/harshrofff-na/receipts-vast-hack/runs/kvzklxkd (results table + chart). Keep the footer chip as "W&B (eval tracking)" linking to that run, and in the README "Sponsor tools" list it as: Weights & Biases, eval results table and chart logged per run (eval/compare.py). Do not claim W&B inference or Weave tracing; neither ran.
