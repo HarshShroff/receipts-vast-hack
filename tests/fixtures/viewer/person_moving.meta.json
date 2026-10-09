@@ -1,0 +1,103 @@
+{
+ "clip_id": "person_moving",
+ "description": "Venue footage recorded 2026-10-09: one person near a white pillar (audio stripped).",
+ "path": "clips/person_moving.mp4",
+ "scene": "venue",
+ "segments": [
+  {
+   "action": "Standing left of the pole, giving a thumbs up.",
+   "claims": [
+    {
+     "attribute": "position",
+     "entity": "person",
+     "location": "venue",
+     "value": "left_of_pole"
+    },
+    {
+     "attribute": "gesture",
+     "entity": "person",
+     "value": "thumbs_up"
+    }
+   ],
+   "entity": "person",
+   "id": "yuri_thumbs_up",
+   "notes": "Center-left of the frame, occupying approximately the middle third vertically.",
+   "source": "gemini",
+   "t_end": 1.0,
+   "t_start": 0.0
+  },
+  {
+   "action": "Walking backwards and hiding behind the pole, then peeking out.",
+   "claims": [
+    {
+     "attribute": "position",
+     "entity": "person",
+     "location": "venue",
+     "value": "behind_pole"
+    }
+   ],
+   "entity": "person",
+   "id": "yuri_moving_behind_pole",
+   "notes": "Moving from center-left to the center (behind the pole), then partially visible on the center-right of the frame. The box would shrink as he is obscured by the white pillar.",
+   "source": "gemini",
+   "t_end": 4.0,
+   "t_start": 1.0
+  },
+  {
+   "action": "Stepping out to the right of the pole and placing hands in pockets.",
+   "claims": [
+    {
+     "attribute": "position",
+     "entity": "person",
+     "location": "venue",
+     "value": "right_of_pole"
+    }
+   ],
+   "entity": "person",
+   "id": "yuri_standing_right",
+   "notes": "Center-right of the frame, just to the right of the white pole.",
+   "source": "gemini",
+   "t_end": 8.0,
+   "t_start": 4.0
+  }
+ ],
+ "tracks": [
+  {
+   "boxes": [
+    [0.0, 0.2, 0.3, 0.2, 0.5, 0.9],
+    [0.5, 0.22, 0.3, 0.2, 0.5, 0.92],
+    [1.0, 0.25, 0.3, 0.2, 0.5, 0.88],
+    [1.5, 0.6, 0.3, 0.2, 0.5, 0.4],
+    [2.0, 0.28, 0.3, 0.2, 0.5, 0.85],
+    [2.5, 0.3, 0.3, 0.2, 0.5, 0.86],
+    [3.0, 0.55, 0.3, 0.2, 0.5, 0.8],
+    [3.5, 0.6, 0.3, 0.2, 0.5, 0.9],
+    [4.0, 0.62, 0.3, 0.2, 0.5, 0.91]
+   ],
+   "label": "person",
+   "source": "hand",
+   "track_id": 1
+  }
+ ],
+ "version": 1,
+ "video": {
+  "duration": 8.633333,
+  "fps": 30.0,
+  "height": 1080,
+  "width": 1920
+ },
+ "zones": {
+  "left": [
+   [0, 0],
+   [0.5, 0],
+   [0.5, 1],
+   [0, 1]
+  ],
+  "right": [
+   [0.5, 0],
+   [1, 0],
+   [1, 1],
+   [0.5, 1]
+  ]
+ }
+}

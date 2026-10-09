@@ -1,0 +1,57 @@
+{
+ "clip_id": "bridge_02_truck_stuck",
+ "description": "Yellow Penske box truck wedged under the bridge, people at the scene.",
+ "path": "clips/bridge_02_truck_stuck.mp4",
+ "scene": "bridge",
+ "segments": [
+  {
+   "action": "Yellow box truck wedged under the bridge, blocking the underpass.",
+   "claims": [
+    {
+     "attribute": "state",
+     "entity": "underpass",
+     "location": "bridge",
+     "value": "blocked"
+    },
+    {
+     "attribute": "position",
+     "entity": "truck",
+     "location": "bridge",
+     "value": "under_bridge"
+    }
+   ],
+   "confidence": 0.9,
+   "entity": "truck",
+   "id": "stuck",
+   "source": "human",
+   "t_end": 6.0,
+   "t_start": 0.0
+  },
+  {
+   "action": "People gather around the stuck truck; the underpass stays blocked.",
+   "claims": [
+    {
+     "attribute": "state",
+     "entity": "underpass",
+     "location": "bridge",
+     "value": "blocked"
+    }
+   ],
+   "confidence": 0.85,
+   "entity": "truck",
+   "id": "scene",
+   "source": "human",
+   "t_end": 35.0016,
+   "t_start": 6.0
+  }
+ ],
+ "tracks": [],
+ "version": 1,
+ "video": {
+  "duration": 35.001633,
+  "fps": 29.97,
+  "height": 720,
+  "width": 1280
+ },
+ "zones": {}
+}

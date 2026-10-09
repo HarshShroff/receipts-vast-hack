@@ -1,0 +1,40 @@
+{
+ "clip_id": "bridge_03_road_clear_again",
+ "description": "Underpass clear again; the truck is parked at the far left edge of frame.",
+ "path": "clips/bridge_03_road_clear_again.mp4",
+ "scene": "bridge",
+ "segments": [
+  {
+   "action": "Underpass clear; truck parked at the far left, out of the underpass.",
+   "claims": [
+    {
+     "attribute": "state",
+     "entity": "underpass",
+     "location": "bridge",
+     "value": "clear"
+    },
+    {
+     "attribute": "position",
+     "entity": "truck",
+     "location": "bridge",
+     "value": "parked_left"
+    }
+   ],
+   "confidence": 0.9,
+   "entity": "underpass",
+   "id": "clear_again",
+   "source": "human",
+   "t_end": 10.01,
+   "t_start": 0.0
+  }
+ ],
+ "tracks": [],
+ "version": 1,
+ "video": {
+  "duration": 10.01,
+  "fps": 29.97,
+  "height": 720,
+  "width": 1280
+ },
+ "zones": {}
+}

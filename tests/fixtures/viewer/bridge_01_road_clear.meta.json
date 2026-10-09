@@ -1,0 +1,34 @@
+{
+ "clip_id": "bridge_01_road_clear",
+ "description": "Fixed cam on the 11foot8 underpass: clear, normal traffic.",
+ "path": "clips/bridge_01_road_clear.mp4",
+ "scene": "bridge",
+ "segments": [
+  {
+   "action": "Underpass clear; cars pass under the bridge normally.",
+   "claims": [
+    {
+     "attribute": "state",
+     "entity": "underpass",
+     "location": "bridge",
+     "value": "clear"
+    }
+   ],
+   "confidence": 0.9,
+   "entity": "underpass",
+   "id": "clear",
+   "source": "human",
+   "t_end": 9.009,
+   "t_start": 0.0
+  }
+ ],
+ "tracks": [],
+ "version": 1,
+ "video": {
+  "duration": 9.009,
+  "fps": 29.97,
+  "height": 720,
+  "width": 1280
+ },
+ "zones": {}
+}

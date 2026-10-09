@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Receipts — clip viewer</title>
+<link rel="stylesheet" href="static/style.css"/>
+</head>
+<body>
+<header>
+  <h1>Receipts <span class="thin">clip viewer</span></h1>
+  <p class="sub">Footage with its claims over time: boxes from tracks, segments from the VLM, status from <code>receipts.db</code>.
+    <span id="dbnote" class="err"></span></p>
+</header>
+<main>
+  <section class="toolbar">
+    <label for="clip">Clip</label>
+    <select id="clip"></select>
+    <label class="chk"><input type="checkbox" id="zones" checked/> zones</label>
+    <label class="chk"><input type="checkbox" id="labels" checked/> labels</label>
+    <span class="meta" id="clipinfo"></span>
+  </section>
+
+  <section class="stage">
+    <video id="v" controls playsinline preload="metadata" muted></video>
+    <canvas id="overlay"></canvas>
+  </section>
+  <p class="meta hint">Shift-click the picture to print a normalized <code>[x, y]</code> point to the console (for authoring zone polygons).</p>
+
+  <section id="timeline" class="timeline">
+    <div class="lane" id="lane-segments" title="segments"></div>
+    <div class="lane" id="lane-tracks" title="track zone intervals"></div>
+    <div class="playhead" id="playhead"></div>
+  </section>
+
+  <section class="cols">
+    <div class="col">
+      <h2>Segments <span class="meta" id="segcount"></span></h2>
+      <div id="segments"></div>
+    </div>
+    <div class="col">
+      <h2>Tracks <span class="meta" id="trackcount"></span></h2>
+      <div id="tracks"></div>
+
+      <h2>Ask as of</h2>
+      <div class="asof">
+        <input id="asof" type="range" min="0" max="1" step="0.1" value="0"/>
+        <div class="row">
+          <span class="mono" id="asofval">00:00:00</span>
+          <label class="chk"><input type="checkbox" id="follow" checked/> follow playhead</label>
+        </div>
+      </div>
+      <div class="form">
+        <label for="keysel">Known key</label>
+        <select id="keysel"><option value="">— pick a key —</option></select>
+        <div class="row3">
+          <div><label for="entity">entity</label><input id="entity" list="dl-entity" value="underpass"/></div>
+          <div><label for="attribute">attribute</label><input id="attribute" list="dl-attribute" value="state"/></div>
+          <div><label for="location">location</label><input id="location" list="dl-location" value="bridge"/></div>
+        </div>
+        <datalist id="dl-entity"></datalist><datalist id="dl-attribute"></datalist><datalist id="dl-location"></datalist>
+        <div class="row">
+          <label for="maxage">max_age (s)</label><input id="maxage" type="number" min="1" step="1" value="20"/>
+          <button id="ask" type="button">Answer with cited clip</button>
+        </div>
+      </div>
+      <div id="result" hidden></div>
+    </div>
+  </section>
+</main>
+<script src="static/app.js"></script>
+</body>
+</html>

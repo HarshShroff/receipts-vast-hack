@@ -21,6 +21,7 @@ The core is deterministic Python 3 and sqlite3, no model calls. The model only s
     python3 eval/score.py                    # 25-question table, Receipts vs 3 baselines
     python3 -m unittest discover -s tests -v
     python3 run_vss.py                       # Pack C warehouse segments → receipts.db (needs VSS env)
+    python3 viewer/ingest_clips.py && python3 viewer/serve.py   # local clip viewer: boxes + claims over time, see viewer/README.md
 
 ## Running on VAST
 
