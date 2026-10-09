@@ -38,6 +38,9 @@ STATE = {
     "ready": False,
     "known_clips": set(),
     "event_log": [],  # chronological replay events
+    "default_as_of": None,  # first forklift moving→parked supersede
+    "default_question": "Is the forklift on cam-2 moving?",
+    "frame_paths": {},
     "lock": threading.RLock(),
 }
 SUBSCRIBERS: list[queue.Queue] = []
@@ -76,13 +79,130 @@ def public_backend():
             or "").rstrip("/")
 
 
-def stream_url(source):
-    base = public_backend()
-    if not source or not base or not STATE["token"]:
-        return None
+def stream_url(source, clip_id=None):
+    """Browser-facing clip URL — proxied through this app (avoids dead cross-origin players)."""
+    if clip_id:
+        from urllib.parse import quote
+        return f"api/clip?clip_id={quote(clip_id, safe='')}"
+    if source:
+        from urllib.parse import quote
+        return f"api/clip?source={quote(source, safe='')}"
+    return None
+
+
+def _vss_stream_request(source):
+    """Build authenticated request to VSS /videos/stream (token is a required query param)."""
+    import urllib.request
     from urllib.parse import quote
-    return (f"{base}/api/v1/videos/stream?"
-            f"source={quote(source, safe='')}&token={STATE['token']}")
+    backend = (STATE.get("backend") or "").rstrip("/")
+    token = STATE.get("token")
+    if not backend or not token or not source:
+        return None
+    url = (f"{backend}/api/v1/videos/stream?"
+           f"source={quote(source, safe='')}&token={quote(token, safe='')}")
+    return urllib.request.Request(url)
+
+
+FRAME_CACHE = os.environ.get("FRAME_CACHE", "/tmp/receipts_frames")
+
+
+def _resolve_source(clip_id=None, source=None):
+    with STATE["lock"]:
+        store = STATE["store"]
+        if clip_id and store:
+            row = store.db.execute(
+                "SELECT path FROM clips WHERE clip_id=?", (clip_id,)).fetchone()
+            if row and row["path"]:
+                return row["path"]
+    return source
+
+
+def _download_segment_bytes(source, limit=None):
+    """Fetch segment bytes from VSS; optional byte limit for frame extract."""
+    import urllib.request
+    req = _vss_stream_request(source)
+    if not req:
+        raise RuntimeError("vss unavailable")
+    with urllib.request.urlopen(req, timeout=120) as upstream:
+        if limit is None:
+            return upstream.read()
+        chunks = []
+        got = 0
+        while got < limit:
+            block = upstream.read(min(64 * 1024, limit - got))
+            if not block:
+                break
+            chunks.append(block)
+            got += len(block)
+        return b"".join(chunks)
+
+
+def extract_frames(clip_id, source, n=5):
+    """Extract n JPEG frames with ffmpeg; cache under FRAME_CACHE. Returns file paths."""
+    import hashlib
+    import subprocess
+    import tempfile
+    safe = hashlib.sha1((clip_id or source or "x").encode()).hexdigest()[:16]
+    out_dir = os.path.join(FRAME_CACHE, safe)
+    os.makedirs(out_dir, exist_ok=True)
+    existing = sorted(
+        os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.endswith(".jpg"))
+    if len(existing) >= n:
+        return existing[:n]
+    for f in existing:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    raw = _download_segment_bytes(source)
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp.write(raw)
+        tmp_path = tmp.name
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", tmp_path],
+            capture_output=True, text=True, timeout=30, check=False)
+        try:
+            duration = float(probe.stdout.strip() or "5")
+        except ValueError:
+            duration = 5.0
+        duration = max(duration, 0.5)
+        paths = []
+        for i in range(n):
+            t = duration * (i + 0.5) / n
+            out = os.path.join(out_dir, f"f{i:02d}.jpg")
+            subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.3f}",
+                 "-i", tmp_path, "-frames:v", "1", "-q:v", "4", out],
+                check=True, timeout=60)
+            if os.path.exists(out):
+                paths.append(out)
+        return paths
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def segment_playlist():
+    """Ordered clips for the hero player (clip_id, times, path)."""
+    store = STATE["store"]
+    if not store:
+        return []
+    rows = store.db.execute(
+        "SELECT clip_id, path, t_start, t_end, description FROM clips ORDER BY t_start, t_end"
+    ).fetchall()
+    return [{
+        "clip_id": r["clip_id"],
+        "path": r["path"],
+        "t_start": r["t_start"],
+        "t_end": r["t_end"],
+        "caption": (r["description"] or "")[:240],
+        "stream_url": stream_url(r["path"], clip_id=r["clip_id"]),
+        "frames_url": f"api/frames?clip_id={__import__('urllib.parse').quote(r['clip_id'], safe='')}",
+    } for r in rows]
 
 
 def _seg_label(clip_id):
@@ -171,12 +291,27 @@ def build_store():
         known.add(seg["clip_id"])
     t_min = store.db.execute("SELECT MIN(t_start) m FROM clips").fetchone()["m"] or 0.0
     t_max = store.db.execute("SELECT MAX(t_end) m FROM clips").fetchone()["m"] or 1.0
+    # Default scrubber: first forklift moving → parked supersede (demo-visible flip).
+    default_as_of = float(t_max)
+    row = store.db.execute("""
+        SELECT n.observed_at AS t
+        FROM audit a
+        JOIN claims n ON n.id = a.claim_id
+        JOIN claims o ON o.id = a.other_claim_id
+        WHERE a.rule_id = 'SUPERSEDE_NEWER_CONTRADICTS'
+          AND n.entity = 'forklift' AND n.attribute = 'state'
+          AND lower(o.value) = 'moving' AND lower(n.value) = 'parked'
+        ORDER BY n.observed_at ASC LIMIT 1
+    """).fetchone()
+    if row and row["t"] is not None:
+        default_as_of = float(row["t"])
     with STATE["lock"]:
         STATE.update(
             store=store, token=token, backend=backend.rstrip("/"),
             t_min=float(t_min), t_max=float(t_max),
             segment_count=len(segments), ready=True, error=None,
             known_clips=known, event_log=event_log,
+            default_as_of=default_as_of,
         )
 
 
@@ -424,24 +559,27 @@ def ask(entity, attribute, as_of):
             if cl:
                 path = cl["path"]
                 caption = caption or cl["description"]
-    status = r["status"].upper() if r["status"] else "NO_EVIDENCE"
-    if r.get("stale"):
-        status = "STALE"
+    # Claim lifecycle status (ACTIVE/SUPERSEDED/NO_EVIDENCE) separate from stale flag.
+    claim_status = "NO_EVIDENCE"
+    if r["claim_id"]:
+        claim_status = "SUPERSEDED" if store.is_superseded_at(r["claim_id"], parse_t(as_of)) else "ACTIVE"
     return {
         "answer": r["answer"],
-        "status": status,
-        "stale": r["stale"],
+        "status": claim_status,
+        "stale": bool(r.get("stale")),
         "stale_reason": r["stale_reason"],
         "data_gap_note": r["data_gap_note"],
         "claim_id": r["claim_id"],
         "rule_id": rule,
         "camera_id": CAMERA,
         "clip_id": r["clip_id"],
+        "segment_label": _seg_label(r["clip_id"] or ""),
+        "source_path": path,
         "t_start": r["t_start"],
         "t_end": r["t_end"],
         "t_start_fmt": fmt_t(r["t_start"]) if r["t_start"] is not None else None,
         "t_end_fmt": fmt_t(r["t_end"]) if r["t_end"] is not None else None,
-        "stream_url": stream_url(path) if path else None,
+        "stream_url": stream_url(path, clip_id=r["clip_id"]) if (path or r["clip_id"]) else None,
         "caption": caption,
         "history": history,
         "audit": audit_trail,
@@ -450,6 +588,33 @@ def ask(entity, attribute, as_of):
         "entity": entity,
         "attribute": attribute,
     }
+
+
+def demo_as_of():
+    """Prefer a forklift moving→parked supersede moment for the default board view."""
+    store = STATE["store"]
+    if not store:
+        return STATE["t_max"]
+    row = store.db.execute("""
+        SELECT n.observed_at AS t, o.value AS old_v, n.value AS new_v
+        FROM audit a
+        JOIN claims n ON n.id = a.claim_id
+        JOIN claims o ON o.id = a.other_claim_id
+        WHERE a.rule_id = 'SUPERSEDE_NEWER_CONTRADICTS'
+          AND n.entity = 'forklift' AND n.attribute = 'state'
+          AND o.value = 'moving' AND n.value = 'parked'
+        ORDER BY n.observed_at
+        LIMIT 1
+    """).fetchone()
+    if row:
+        return float(row["t"])
+    row = store.db.execute("""
+        SELECT n.observed_at AS t FROM audit a
+        JOIN claims n ON n.id = a.claim_id
+        WHERE a.rule_id = 'SUPERSEDE_NEWER_CONTRADICTS'
+        ORDER BY n.observed_at LIMIT 1
+    """).fetchone()
+    return float(row["t"]) if row else STATE["t_max"]
 
 
 def parse_nl_question(q):
@@ -497,64 +662,73 @@ body{margin:0;min-height:100vh;color:var(--fg);
     radial-gradient(700px 380px at 0% 100%, rgba(224,168,74,.06), transparent),
     linear-gradient(180deg,#070908,#0b0e0c 50%,#0a0d0b);
 }
-header{padding:1.1rem 1.5rem .6rem;display:flex;flex-wrap:wrap;align-items:flex-end;gap:1rem;justify-content:space-between;
+header{padding:.85rem 1.25rem .55rem;display:flex;flex-wrap:wrap;align-items:flex-end;gap:1rem;justify-content:space-between;
   border-bottom:1px solid var(--line)}
-header h1{font-family:Syne,sans-serif;font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:.02em;margin:0;line-height:1}
+header h1{font-family:Syne,sans-serif;font-size:clamp(1.45rem,3.5vw,2.1rem);letter-spacing:.02em;margin:0;line-height:1}
 header h1 span{color:var(--accent)}
-header .tagline{color:var(--muted);font-size:.85rem;margin:.25rem 0 0}
-.live-ctl{display:flex;align-items:center;gap:.75rem;background:var(--panel);border:1px solid var(--line);padding:.55rem .85rem}
-.live-ctl label{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;font-size:.8rem;letter-spacing:.06em}
+header .tagline{color:var(--muted);font-size:.8rem;margin:.2rem 0 0}
+.live-ctl{display:flex;align-items:center;gap:.75rem;background:var(--panel);border:1px solid var(--line);padding:.5rem .8rem}
+.live-ctl label{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;font-size:.78rem;letter-spacing:.06em}
 .live-ctl input{accent-color:var(--green);width:1.1rem;height:1.1rem}
-.live-hint{color:var(--muted);font-size:.72rem;max-width:16rem;line-height:1.35}
+.live-hint{color:var(--muted);font-size:.7rem;max-width:15rem;line-height:1.35}
 .live-dot{width:.55rem;height:.55rem;border-radius:50%;background:var(--stale);display:inline-block}
 .live-dot.on{background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1.2s infinite}
 @keyframes pulse{50%{opacity:.45}}
-main{padding:1rem 1.5rem 5rem;max-width:1200px;margin:0 auto}
-.clock{color:var(--muted);font-size:.78rem;margin:.4rem 0 1rem}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem}
-.tile{position:relative;background:var(--panel);border:1px solid var(--line);padding:1rem .9rem .85rem;
-  min-height:128px;overflow:hidden;transition:border-color .25s, background .25s, transform .35s}
+main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
+.stage{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,.9fr);gap:.85rem;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:1fr}}
+.player-wrap{background:#000;border:1px solid var(--line);position:relative;min-height:280px}
+#heroVideo{width:100%;display:block;max-height:min(62vh,560px);background:#000;aspect-ratio:16/9;object-fit:contain}
+#frameStrip{display:none;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:4px;padding:4px;background:#0a0d0b}
+#frameStrip.show{display:grid}
+#frameStrip img{width:100%;height:100px;object-fit:cover;border:1px solid var(--line)}
+.player-meta{display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.45rem .55rem;background:var(--panel);border:1px solid var(--line);border-top:0;font-size:.72rem;color:var(--muted)}
+.player-meta strong{color:var(--fg)}
+.range-tag{color:var(--amber)}
+.side-tiles{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
+.side-tiles .tile{min-height:96px;padding:.75rem .7rem}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.65rem;margin-top:.85rem}
+.tile{position:relative;background:var(--panel);border:1px solid var(--line);padding:.85rem .75rem .7rem;
+  min-height:110px;overflow:hidden;transition:border-color .25s, background .25s, transform .35s}
 .tile.flash{animation:claimIn .55s ease}
-@keyframes claimIn{from{transform:translateY(10px);opacity:.2}to{transform:none;opacity:1}}
-.tile .lbl{font-size:.65rem;letter-spacing:.12em;color:var(--muted)}
-.tile .sub{font-size:.7rem;color:var(--muted);margin-top:.15rem;text-transform:uppercase}
-.tile .val{font-family:Syne,sans-serif;font-size:1.55rem;font-weight:700;margin:.55rem 0 .35rem;letter-spacing:.02em}
+@keyframes claimIn{from{transform:translateY(8px);opacity:.15}to{transform:none;opacity:1}}
+.tile .lbl{font-size:.62rem;letter-spacing:.12em;color:var(--muted)}
+.tile .sub{font-size:.68rem;color:var(--muted);margin-top:.1rem;text-transform:uppercase}
+.tile .val{font-family:Syne,sans-serif;font-size:1.35rem;font-weight:700;margin:.4rem 0 .25rem;letter-spacing:.02em}
 .tile .val.strike{text-decoration:line-through;color:var(--red);animation:strikeFlash .7s ease}
 @keyframes strikeFlash{0%,100%{opacity:1}40%{opacity:.25;color:#fff}}
-.tile .age{font-size:.68rem;color:var(--muted)}
-.tile.green{border-color:rgba(61,207,122,.45);box-shadow:inset 0 0 0 1px rgba(61,207,122,.08)}
+.tile .age{font-size:.65rem;color:var(--muted)}
+.tile.green{border-color:rgba(61,207,122,.45)}
 .tile.green .val{color:var(--green)}
-.tile.amber{border-color:rgba(224,168,74,.5);box-shadow:inset 0 0 0 1px rgba(224,168,74,.1)}
+.tile.amber{border-color:rgba(224,168,74,.5)}
 .tile.amber .val{color:var(--amber)}
-.tile.red{border-color:rgba(228,87,74,.55);box-shadow:inset 0 0 0 1px rgba(228,87,74,.12)}
+.tile.red{border-color:rgba(228,87,74,.55)}
 .tile.red .val{color:var(--red)}
 .tile.stale{opacity:.55;filter:grayscale(.7);border-color:#333}
 .tile.stale .val{color:var(--stale)}
-.banner{margin:.75rem 0;padding:.55rem .75rem;background:#2a1e1c;border:1px solid #5a3530;color:#f0b4ae;font-size:.78rem;letter-spacing:.04em}
-section{margin-top:1.75rem}
-section h2{font-family:Syne,sans-serif;font-size:1rem;letter-spacing:.08em;margin:0 0 .75rem;color:var(--accent)}
+.clock{color:var(--muted);font-size:.75rem;margin:.35rem 0 .65rem}
+.banner{margin:.5rem 0;padding:.5rem .7rem;background:#2a1e1c;border:1px solid #5a3530;color:#f0b4ae;font-size:.75rem}
+section{margin-top:1.5rem}
+section h2{font-family:Syne,sans-serif;font-size:.95rem;letter-spacing:.08em;margin:0 0 .65rem;color:var(--accent)}
 .ask-row{display:flex;gap:.5rem;flex-wrap:wrap}
 .ask-row input[type=text]{flex:1;min-width:220px;background:#0e1210;border:1px solid var(--line);color:var(--fg);
-  padding:.7rem .8rem;font:inherit;font-size:.9rem}
-.ask-row button,.scrub button{background:var(--accent);color:#0b120e;border:0;padding:.7rem 1rem;font:inherit;font-weight:600;cursor:pointer}
-.ask-row button:hover{filter:brightness(1.08)}
-.presets{display:flex;flex-wrap:wrap;gap:.4rem;margin:.55rem 0 0}
-.presets button{background:transparent;border:1px solid var(--line);color:var(--muted);padding:.35rem .55rem;font:inherit;font-size:.7rem;cursor:pointer}
+  padding:.65rem .75rem;font:inherit;font-size:.88rem}
+.ask-row button{background:var(--accent);color:#0b120e;border:0;padding:.65rem 1rem;font:inherit;font-weight:600;cursor:pointer}
+.presets{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0 0}
+.presets button{background:transparent;border:1px solid var(--line);color:var(--muted);padding:.3rem .5rem;font:inherit;font-size:.68rem;cursor:pointer}
 .presets button:hover{border-color:var(--accent);color:var(--fg)}
-#askOut{margin-top:1rem;background:var(--panel);border:1px solid var(--line);padding:1rem;display:none}
-.badge{display:inline-block;padding:.12rem .45rem;font-size:.68rem;letter-spacing:.06em;font-weight:700}
+#askOut{margin-top:.85rem;background:var(--panel);border:1px solid var(--line);padding:.9rem;display:none}
+.badge{display:inline-block;padding:.12rem .45rem;font-size:.66rem;letter-spacing:.06em;font-weight:700}
 .badge.ACTIVE{background:#163222;color:var(--green)}
 .badge.STALE{background:#3a2422;color:var(--red)}
 .badge.SUPERSEDED{background:#3a2f1a;color:var(--amber)}
 .badge.NO_EVIDENCE{background:#222;color:var(--muted)}
-.quote{margin:.75rem 0;padding:.65rem .75rem;border-left:3px solid var(--accent);color:#c5d4c9;font-size:.82rem;line-height:1.45}
-video{width:100%;max-height:320px;background:#000;margin:.6rem 0;border:1px solid var(--line)}
-details{margin-top:.75rem;font-size:.78rem;color:var(--muted)}
-details table{width:100%;border-collapse:collapse;margin-top:.4rem}
-details th,details td{text-align:left;padding:.35rem .3rem;border-bottom:1px solid var(--line);vertical-align:top}
-.scrub{margin-top:.5rem}
+.quote{margin:.65rem 0;padding:.55rem .7rem;border-left:3px solid var(--accent);color:#c5d4c9;font-size:.8rem;line-height:1.4}
+details{margin-top:.65rem;font-size:.75rem;color:var(--muted)}
+details table{width:100%;border-collapse:collapse;margin-top:.35rem}
+details th,details td{text-align:left;padding:.3rem;border-bottom:1px solid var(--line);vertical-align:top}
 .scrub input[type=range]{width:100%;accent-color:var(--accent)}
-.timeline{position:relative;height:72px;background:#0e1210;border:1px solid var(--line);margin-top:.5rem;overflow:hidden}
+.timeline{position:relative;height:68px;background:#0e1210;border:1px solid var(--line);margin-top:.45rem;overflow:hidden}
 .tl-track{position:absolute;left:0;right:0;top:28px;height:4px;background:#2a332c}
 .tl-mark{position:absolute;top:18px;width:3px;height:24px;background:var(--amber);transform:translateX(-1px)}
 .tl-mark.sup{background:var(--red);width:4px;height:32px;top:14px}
@@ -562,14 +736,14 @@ details th,details td{text-align:left;padding:.35rem .3rem;border-bottom:1px sol
   padding:.25rem .4rem;white-space:nowrap;font-size:.65rem;color:var(--fg);z-index:2}
 .tl-mark:hover .tip{display:block}
 .tl-cursor{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.tl-cite{position:absolute;top:8px;height:52px;background:rgba(143,212,168,.18);border:1px solid var(--accent);pointer-events:none}
 #toasts{position:fixed;right:1rem;bottom:4.5rem;display:flex;flex-direction:column;gap:.45rem;z-index:20;max-width:min(380px,92vw)}
-.toast{background:var(--toast);border:1px solid var(--red);color:#f3d0cb;padding:.65rem .8rem;font-size:.78rem;letter-spacing:.03em;
-  animation:toastIn .35s ease}
+.toast{background:var(--toast);border:1px solid var(--red);color:#f3d0cb;padding:.6rem .75rem;font-size:.75rem;animation:toastIn .35s ease}
 @keyframes toastIn{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
-footer{position:fixed;left:0;right:0;bottom:0;padding:.55rem 1rem;background:rgba(8,10,9,.92);border-top:1px solid var(--line);
-  display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.68rem;color:var(--muted);backdrop-filter:blur(6px)}
-footer .chip{border:1px solid var(--line);padding:.2rem .45rem;color:#b7c7bb;letter-spacing:.04em}
-.meta{color:var(--muted);font-size:.78rem}
+footer{position:fixed;left:0;right:0;bottom:0;padding:.5rem 1rem;background:rgba(8,10,9,.92);border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;font-size:.66rem;color:var(--muted);backdrop-filter:blur(6px)}
+footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;letter-spacing:.04em}
+.meta{color:var(--muted);font-size:.75rem}
 .err{color:var(--red)}
 </style>
 </head>
@@ -577,24 +751,39 @@ footer .chip{border:1px solid var(--line);padding:.2rem .45rem;color:#b7c7bb;let
 <header>
   <div>
     <h1>RECEIPTS <span>— every answer has a clip</span></h1>
-    <p class="tagline">Warehouse ops board · cam-2 · Pack C · answers cite footage, never a guess</p>
+    <p class="tagline">Warehouse ops · cam-2 · Pack C · footage first, then the claim</p>
   </div>
   <div class="live-ctl">
     <label><span class="live-dot" id="liveDot"></span>
       <input type="checkbox" id="liveToggle"/> LIVE
     </label>
-    <div class="live-hint">Replay of indexed footage · ~1 segment / 2s. Poller watches VSS for new segments (re-ingest).</div>
+    <div class="live-hint">Replay of indexed footage · player advances per segment · ~2s cadence</div>
   </div>
 </header>
 <main>
   <div class="clock">as_of <strong id="asofLabel">—</strong> · coverage <span id="covLabel">—</span> · <span id="segLabel">…</span></div>
   <div id="staleBanner" class="banner" hidden></div>
+
+  <div class="stage">
+    <div>
+      <div class="player-wrap">
+        <video id="heroVideo" controls playsinline autoplay muted></video>
+        <div id="frameStrip" aria-label="segment frames"></div>
+      </div>
+      <div class="player-meta">
+        <div>Playing <strong id="playClip">—</strong></div>
+        <div id="playRange" class="range-tag"></div>
+        <div id="playStatus">loading footage…</div>
+      </div>
+    </div>
+    <div class="side-tiles" id="sideTiles"></div>
+  </div>
   <div class="tiles" id="tiles"></div>
 
   <section>
     <h2>ASK</h2>
     <div class="ask-row">
-      <input id="q" type="text" placeholder='Is the forklift on cam-2 moving?' value="Is the forklift on cam-2 moving?"/>
+      <input id="q" type="text" placeholder="Is the forklift on cam-2 moving?" value="Is the forklift on cam-2 moving?"/>
       <button id="askBtn" type="button">Answer</button>
     </div>
     <div class="presets">
@@ -609,11 +798,11 @@ footer .chip{border:1px solid var(--line);padding:.2rem .45rem;color:#b7c7bb;let
   <section>
     <h2>TIMELINE</h2>
     <div class="scrub">
-      <label class="meta">Time scrubber (as_of) — travel the whole board
+      <label class="meta">Time scrubber (as_of)
         <input id="scrub" type="range" min="0" max="1" step="1" value="0"/>
       </label>
     </div>
-    <div class="timeline" id="timeline" title="Claim + supersede markers"></div>
+    <div class="timeline" id="timeline"></div>
     <p class="meta" id="tlMeta"></p>
   </section>
 </main>
@@ -626,11 +815,13 @@ footer .chip{border:1px solid var(--line);padding:.2rem .45rem;color:#b7c7bb;let
   <span class="chip">Cursor</span>
 </footer>
 <script>
-let meta={t_min:0,t_max:1,ready:false};
+let meta={t_min:0,t_max:1,ready:false,segments:[]};
 let asOf=0;
 let liveOn=false;
 let es=null;
 let prevTiles={};
+let currentClipId=null;
+let citeRange=null;
 const $ = id => document.getElementById(id);
 
 function fmt(s){
@@ -644,7 +835,7 @@ function ageText(sec){
   if(sec==null||!isFinite(sec)) return 'unconfirmed';
   const s=Math.max(0,Math.round(sec));
   if(s<60) return 'last confirmed '+s+'s ago';
-  return 'last confirmed '+Math.floor(s/60)+'m '+ (s%60) +'s ago';
+  return 'last confirmed '+Math.floor(s/60)+'m '+(s%60)+'s ago';
 }
 function toast(msg){
   const el=document.createElement('div');
@@ -653,11 +844,102 @@ function toast(msg){
   $('toasts').appendChild(el);
   setTimeout(()=>el.remove(),5200);
 }
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));}
 function setScrub(v){
   const sl=$('scrub');
   sl.value=Math.round(v);
   asOf=Number(sl.value);
   $('asofLabel').textContent=fmt(asOf);
+}
+function shortClip(id){
+  if(!id) return '—';
+  const m=String(id).match(/(ceiling_\d+|eye_\d+).*?(segment_\d+)/);
+  return m ? (m[1]+' '+m[2].replace('segment_','seg ')) : id.slice(-36);
+}
+
+async function showFrames(clipId){
+  const strip=$('frameStrip');
+  const vid=$('heroVideo');
+  try{
+    const r=await fetch('api/frames?clip_id='+encodeURIComponent(clipId)+'&n=5');
+    const d=await r.json();
+    if(!d.frames||!d.frames.length) throw new Error(d.error||'no frames');
+    strip.innerHTML=d.frames.map(u=>'<img src="'+u+'" alt="frame"/>').join('');
+    strip.classList.add('show');
+    vid.style.display='none';
+    $('playStatus').textContent='frame strip (video unavailable)';
+  }catch(e){
+    strip.classList.remove('show');
+    $('playStatus').textContent='no video / frames: '+(e.message||e);
+  }
+}
+
+function playClip(clip, {autoplay=true, highlight=null}={}){
+  if(!clip||!clip.clip_id) return;
+  const vid=$('heroVideo');
+  const strip=$('frameStrip');
+  strip.classList.remove('show');
+  strip.innerHTML='';
+  vid.style.display='block';
+  currentClipId=clip.clip_id;
+  citeRange=highlight;
+  $('playClip').textContent=shortClip(clip.clip_id);
+  $('playRange').textContent=fmt(clip.t_start)+'–'+fmt(clip.t_end)
+    +(highlight?(' · cited '+fmt(highlight[0])+'–'+fmt(highlight[1])):'');
+  $('playStatus').textContent='loading segment…';
+  const url=clip.stream_url||('api/clip?clip_id='+encodeURIComponent(clip.clip_id));
+  if(vid.dataset.src!==url){
+    vid.dataset.src=url;
+    vid.src=url;
+  }
+  const onErr=()=>{ showFrames(clip.clip_id); };
+  vid.onerror=onErr;
+  vid.onloadeddata=()=>{
+    $('playStatus').textContent=autoplay?'playing':'ready';
+    if(autoplay){ vid.play().catch(()=>{}); }
+  };
+  // If the proxy returns JSON error, video errors quickly
+  setTimeout(()=>{
+    if(vid.readyState===0 && currentClipId===clip.clip_id){
+      // still nothing — try frames
+      fetch(url,{method:'GET'}).then(r=>{
+        if(!r.ok) showFrames(clip.clip_id);
+      }).catch(()=>showFrames(clip.clip_id));
+    }
+  }, 2500);
+}
+
+function clipAt(t){
+  const segs=meta.segments||[];
+  let best=null;
+  for(const s of segs){
+    if(s.t_start<=t && t<=s.t_end+0.05) return s;
+    if(s.t_end<=t) best=s;
+  }
+  return best||segs[0]||null;
+}
+
+function renderTiles(tiles, rootId, limit){
+  const root=$(rootId);
+  const list=limit?tiles.slice(0,limit):tiles;
+  const html=[];
+  for(const t of list){
+    const prev=prevTiles[t.id];
+    let valHtml=esc(t.display||'—');
+    let flash='';
+    if(prev && prev.value!=null && t.value!=null && prev.value!==t.value){
+      valHtml='<span class="strike">'+esc(String(prev.display))+'</span> <span>'+esc(t.display)+'</span>';
+      flash=' flash';
+    } else if(prev && prev.value==null && t.value!=null){
+      flash=' flash';
+    }
+    html.push('<div class="tile '+t.tone+flash+'" data-id="'+t.id+'">'
+      +'<div class="lbl">'+esc(t.label)+'</div>'
+      +'<div class="sub">'+esc(t.sub)+'</div>'
+      +'<div class="val">'+valHtml+'</div>'
+      +'<div class="age">'+esc(ageText(t.age_sec))+'</div></div>');
+  }
+  root.innerHTML=html.join('');
 }
 
 async function refreshBoard(){
@@ -666,34 +948,19 @@ async function refreshBoard(){
   const d=await r.json();
   $('covLabel').textContent=d.coverage_end_fmt||'—';
   let banner=null;
-  const root=$('tiles');
-  const html=[];
-  for(const t of d.tiles){
-    const prev=prevTiles[t.id];
-    let valHtml=t.display||'—';
-    let flash='';
-    if(prev && prev.value!=null && t.value!=null && prev.value!==t.value){
-      valHtml='<span class="strike">'+esc(String(prev.display))+'</span> <span>'+esc(t.display)+'</span>';
-      flash=' flash';
-    } else if(prev && prev.value==null && t.value!=null){
-      flash=' flash';
-    }
-    if(t.stale_banner) banner=t.stale_banner;
-    html.push('<div class="tile '+t.tone+flash+'" data-id="'+t.id+'">'
-      +'<div class="lbl">'+esc(t.label)+'</div>'
-      +'<div class="sub">'+esc(t.sub)+'</div>'
-      +'<div class="val">'+valHtml+'</div>'
-      +'<div class="age">'+esc(ageText(t.age_sec))+'</div></div>');
-  }
-  root.innerHTML=html.join('');
-  const map={};
-  d.tiles.forEach(t=>map[t.id]=t);
-  prevTiles=map;
+  for(const t of d.tiles){ if(t.stale_banner) banner=t.stale_banner; }
+  // Hero side: forklift + first few worker tiles
+  renderTiles(d.tiles, 'sideTiles', 4);
+  renderTiles(d.tiles.slice(4), 'tiles', 99);
+  const map={}; d.tiles.forEach(t=>map[t.id]=t); prevTiles=map;
   const b=$('staleBanner');
-  if(banner){b.hidden=false;b.textContent=banner;} else {b.hidden=true;}
+  if(banner){b.hidden=false;b.textContent=banner;} else b.hidden=true;
+  // Keep player on segment for current as_of unless live/ask owns it
+  if(!liveOn){
+    const c=clipAt(asOf);
+    if(c && c.clip_id!==currentClipId) playClip(c,{autoplay:true});
+  }
 }
-
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));}
 
 async function refreshTimeline(){
   if(!meta.ready) return;
@@ -701,8 +968,12 @@ async function refreshTimeline(){
   const d=await r.json();
   const el=$('timeline');
   const span=Math.max(1,d.t_max-d.t_min);
-  const marks=[];
-  marks.push('<div class="tl-track"></div>');
+  const marks=['<div class="tl-track"></div>'];
+  if(citeRange){
+    const a=((citeRange[0]-d.t_min)/span)*100;
+    const w=((citeRange[1]-citeRange[0])/span)*100;
+    marks.push('<div class="tl-cite" style="left:'+a+'%;width:'+Math.max(w,0.8)+'%"></div>');
+  }
   for(const c of d.claims){
     const pct=((c.observed_at-d.t_min)/span)*100;
     marks.push('<div class="tl-mark" style="left:'+pct+'%"><span class="tip">'+esc(c.entity)+'/'+esc(c.attribute)+'='+esc(c.value)+' @ '+fmt(c.observed_at)+'</span></div>');
@@ -714,26 +985,38 @@ async function refreshTimeline(){
   const cur=((asOf-d.t_min)/span)*100;
   marks.push('<div class="tl-cursor" style="left:'+cur+'%"></div>');
   el.innerHTML=marks.join('');
-  $('tlMeta').textContent=d.claims.length+' claims · '+d.supersedes.length+' supersedes on strip';
+  $('tlMeta').textContent=d.claims.length+' claims · '+d.supersedes.length+' supersedes';
 }
 
+let didAutoAsk=false;
 async function init(){
   const r=await fetch('api/meta');
   meta=await r.json();
   const sl=$('scrub');
   sl.min=Math.floor(meta.t_min);
   sl.max=Math.ceil(meta.t_max);
-  if(!liveOn) setScrub(sl.max);
-  else setScrub(Math.max(sl.min, asOf||sl.min));
+  if(!liveOn){
+    const demo=meta.demo_as_of!=null ? meta.demo_as_of : meta.t_max;
+    setScrub(demo);
+  } else setScrub(Math.max(sl.min, asOf||sl.min));
   $('segLabel').textContent=meta.ready
-    ? (meta.segment_count+' segments indexed · '+fmt(meta.t_min)+' → '+fmt(meta.t_max))
+    ? (meta.segment_count+' segments · '+fmt(meta.t_min)+' → '+fmt(meta.t_max))
     : ('Not ready: '+(meta.error||'building store…'));
   if(meta.error) $('segLabel').classList.add('err');
-  if(meta.ready){ await refreshBoard(); await refreshTimeline(); }
+  if(meta.ready){
+    const boot=meta.demo_clip || clipAt(asOf);
+    if(boot) playClip(boot,{autoplay:true});
+    await refreshBoard();
+    await refreshTimeline();
+    if(!didAutoAsk && !liveOn){
+      didAutoAsk=true;
+      $('q').value='Is the forklift on cam-2 moving?';
+      await doAsk();
+    }
+  }
 }
 
 $('scrub').addEventListener('input', async (e)=>{
-  if(liveOn){ /* scrubbing pauses visual only */ }
   setScrub(e.target.value);
   await refreshBoard();
   await refreshTimeline();
@@ -748,25 +1031,20 @@ function startLive(){
   es=new EventSource('api/live');
   es.onmessage=(ev)=>{
     let d; try{d=JSON.parse(ev.data);}catch{return;}
-    if(d.type==='heartbeat'||d.type==='poll_error') return;
-    if(d.type==='replay_done'){
-      toast('Replay complete — board at end of indexed footage');
-      return;
-    }
-    if(d.t_end!=null){
-      setScrub(d.t_end);
+    if(d.type==='heartbeat'||d.type==='poll_error'||d.type==='hello') return;
+    if(d.type==='replay_done'){ toast('Replay complete'); return; }
+    if(d.t_end!=null) setScrub(d.t_end);
+    if(d.type==='segment' && d.clip_id){
+      playClip({clip_id:d.clip_id, t_start:d.t_start, t_end:d.t_end,
+        stream_url:'api/clip?clip_id='+encodeURIComponent(d.clip_id)}, {autoplay:true});
     }
     if(d.type==='supersede'){
       toast(d.toast||('SUPERSEDED: '+d.old+' → '+d.new));
     }
-    if(d.type==='segment' && d.live_new){
-      toast('NEW SEGMENT from VSS · '+ (d.clip_id||'').slice(-40));
-      init();
-    }
+    if(d.live_new){ toast('NEW SEGMENT from VSS'); init(); }
     refreshBoard();
     refreshTimeline();
   };
-  es.onerror=()=>{ /* browser retries */ };
 }
 function stopLive(){
   liveOn=false;
@@ -774,7 +1052,8 @@ function stopLive(){
   if(es){es.close();es=null;}
 }
 $('liveToggle').addEventListener('change',(e)=>{
-  if(e.target.checked) startLive(); else { stopLive(); setScrub(meta.t_max); refreshBoard(); refreshTimeline(); }
+  if(e.target.checked) startLive();
+  else { stopLive(); setScrub(meta.demo_as_of||meta.t_max); refreshBoard(); refreshTimeline(); }
 });
 
 async function doAsk(){
@@ -790,36 +1069,41 @@ async function doAsk(){
       +'</table></details>';
   }
   const ans=d.answer==null?'(no claim)':d.answer;
-  const video=d.stream_url
-    ? '<video controls preload="metadata" src="'+d.stream_url+'"></video>'
-    : '<p class="meta">No playable stream for this citation.</p>';
+  const staleBadge=d.stale?' <span class="badge STALE">STALE</span>':'';
   const quote=d.caption ? '<div class="quote">“'+esc(d.caption)+'”</div>' : '';
   el.innerHTML=
-    '<p><span class="badge '+(d.status||'')+'">'+(d.status||'')+'</span>'
-    +(d.rule_id?' · <code>'+esc(d.rule_id)+'</code>':'')+'</p>'
-    +'<div style="font-family:Syne,sans-serif;font-size:1.5rem;margin:.4rem 0">'+esc(String(ans))+'</div>'
+    '<p><span class="badge '+(d.status||'')+'">'+(d.status||'')+'</span>'+staleBadge
+    +(d.rule_id?' · created by <code>'+esc(d.rule_id)+'</code>':'')+'</p>'
+    +'<div style="font-family:Syne,sans-serif;font-size:1.45rem;margin:.35rem 0">'+esc(String(ans))+'</div>'
     +'<p class="meta"><code>'+esc(d.entity)+'</code> / <code>'+esc(d.attribute)+'</code> @ <code>'+esc(d.camera_id)
     +'</code> · as_of '+esc(d.as_of_fmt)+'</p>'
-    +(d.clip_id?'<p class="meta">Cited · <code>'+esc(d.clip_id)+'</code> · '+esc(d.t_start_fmt)+'–'+esc(d.t_end_fmt)+'</p>':'')
+    +(d.clip_id?'<p class="meta">Cited '+esc(d.segment_label||'')+' · <code>'+esc(d.clip_id)+'</code> · '+esc(d.t_start_fmt)+'–'+esc(d.t_end_fmt)+'</p>':'')
     +quote
-    +(d.stale_reason?'<p class="err">'+esc(d.stale_reason)+'</p>':'')
+    +(d.stale&&d.stale_reason?'<p class="err">'+esc(d.stale_reason)+'</p>':'')
     +(d.data_gap_note?'<p class="meta">'+esc(d.data_gap_note)+'</p>':'')
-    +video+audit;
+    +audit;
+  if(d.clip_id){
+    playClip({
+      clip_id:d.clip_id,
+      t_start:d.t_start,
+      t_end:d.t_end,
+      stream_url:d.stream_url
+    }, {autoplay:true, highlight:[d.t_start,d.t_end]});
+    refreshTimeline();
+  }
 }
 $('askBtn').addEventListener('click', doAsk);
 document.querySelectorAll('.presets button').forEach(b=>{
   b.addEventListener('click',()=>{ $('q').value=b.dataset.q; doAsk(); });
 });
 
-// ticking ages
-setInterval(()=>{ if(meta.ready && !document.hidden) refreshBoard(); }, 2000);
+setInterval(()=>{ if(meta.ready && !document.hidden) refreshBoard(); }, 2500);
 init();
 setInterval(()=>{ if(!meta.ready) init(); }, 2500);
 </script>
 </body>
 </html>
 """
-
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -893,6 +1177,15 @@ class Handler(BaseHTTPRequestHandler):
                 "segments": STATE["segment_count"],
             }), "application/json")
         if path == "/api/meta":
+            demo_t = demo_as_of() if STATE["ready"] else STATE["t_max"]
+            segs = segment_playlist() if STATE["ready"] else []
+            demo_clip = None
+            for s in segs:
+                if s["t_start"] <= demo_t <= s["t_end"] + 0.01:
+                    demo_clip = s
+                    break
+            if demo_clip is None and segs:
+                demo_clip = min(segs, key=lambda s: abs(s["t_end"] - demo_t))
             return self._send(200, json.dumps({
                 "ready": STATE["ready"], "error": STATE["error"],
                 "t_min": STATE["t_min"], "t_max": STATE["t_max"],
@@ -900,7 +1193,16 @@ class Handler(BaseHTTPRequestHandler):
                 "camera_id": CAMERA, "zones": list(ZONES),
                 "live_interval_sec": LIVE_INTERVAL,
                 "live_label": "replay of indexed footage",
+                "demo_as_of": demo_t,
+                "demo_as_of_fmt": fmt_t(demo_t) if STATE["ready"] else None,
+                "demo_clip": demo_clip,
+                "segments": segs,
             }), "application/json")
+        if path == "/api/segments":
+            if not STATE["ready"]:
+                return self._send(503, json.dumps({"error": "not ready"}), "application/json")
+            return self._send(200, json.dumps({"segments": segment_playlist()}),
+                              "application/json")
         if path == "/api/board":
             if not STATE["ready"]:
                 return self._send(503, json.dumps({"error": STATE["error"] or "not ready"}),
@@ -944,6 +1246,104 @@ class Handler(BaseHTTPRequestHandler):
             if not STATE["ready"]:
                 return self._send(503, json.dumps({"error": "not ready"}), "application/json")
             return self._sse()
+        if path == "/api/clip":
+            if not STATE["ready"]:
+                return self._send(503, json.dumps({"error": "not ready"}), "application/json")
+            q = parse_qs(parsed.query)
+            clip_id = (q.get("clip_id") or [None])[0]
+            source = _resolve_source(clip_id, (q.get("source") or [None])[0])
+            if not source:
+                return self._send(404, json.dumps({"error": "clip not found"}), "application/json")
+            req = _vss_stream_request(source)
+            if not req:
+                return self._send(502, json.dumps({"error": "vss unavailable"}), "application/json")
+            try:
+                import urllib.error
+                import urllib.request
+                with urllib.request.urlopen(req, timeout=120) as upstream:
+                    ctype = upstream.headers.get("Content-Type") or "video/mp4"
+                    if "octet-stream" in ctype or not ctype.startswith("video/"):
+                        ctype = "video/mp4"
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    clen = upstream.headers.get("Content-Length")
+                    if clen:
+                        self.send_header("Content-Length", clen)
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Cache-Control", "private, max-age=120")
+                    self.end_headers()
+                    while True:
+                        chunk = upstream.read(64 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                return
+            except urllib.error.HTTPError as e:
+                body = e.read() if hasattr(e, "read") else b""
+                return self._send(e.code, json.dumps({
+                    "error": "stream failed",
+                    "source": source,
+                    "detail": body[:200].decode("utf-8", "replace"),
+                    "frames_url": (f"api/frames?clip_id={clip_id}" if clip_id else None),
+                }), "application/json")
+            except Exception as e:
+                return self._send(502, json.dumps({
+                    "error": "stream proxy failed",
+                    "source": source,
+                    "detail": str(e),
+                    "frames_url": (f"api/frames?clip_id={clip_id}" if clip_id else None),
+                }), "application/json")
+        if path == "/api/frames":
+            if not STATE["ready"]:
+                return self._send(503, json.dumps({"error": "not ready"}), "application/json")
+            q = parse_qs(parsed.query)
+            clip_id = (q.get("clip_id") or [None])[0]
+            source = _resolve_source(clip_id, (q.get("source") or [None])[0])
+            if not source:
+                return self._send(404, json.dumps({"error": "clip not found"}), "application/json")
+            try:
+                n = int((q.get("n") or ["5"])[0])
+                n = max(3, min(n, 6))
+                paths = extract_frames(clip_id or source, source, n=n)
+                # Serve as multipart-ish JSON with data URLs is heavy; list indexed URLs.
+                urls = [
+                    f"api/frame_file?clip_id={__import__('urllib.parse').quote(clip_id or '', safe='')}&i={i}"
+                    for i in range(len(paths))
+                ]
+                # Stash paths for frame_file
+                with STATE["lock"]:
+                    STATE.setdefault("frame_paths", {})[clip_id or source] = paths
+                return self._send(200, json.dumps({
+                    "clip_id": clip_id, "source": source, "frames": urls, "count": len(urls),
+                }), "application/json")
+            except Exception as e:
+                return self._send(502, json.dumps({
+                    "error": "frame extract failed", "detail": str(e), "source": source,
+                }), "application/json")
+        if path == "/api/frame_file":
+            q = parse_qs(parsed.query)
+            clip_id = (q.get("clip_id") or [""])[0]
+            try:
+                i = int((q.get("i") or ["0"])[0])
+            except ValueError:
+                i = 0
+            with STATE["lock"]:
+                paths = (STATE.get("frame_paths") or {}).get(clip_id) or []
+            if not paths or i < 0 or i >= len(paths):
+                # Try extract on the fly
+                source = _resolve_source(clip_id, None)
+                if not source:
+                    return self._send(404, b"missing", "text/plain")
+                try:
+                    paths = extract_frames(clip_id, source, n=5)
+                    with STATE["lock"]:
+                        STATE.setdefault("frame_paths", {})[clip_id] = paths
+                except Exception as e:
+                    return self._send(502, str(e).encode(), "text/plain")
+            if i >= len(paths):
+                return self._send(404, b"no frame", "text/plain")
+            data = open(paths[i], "rb").read()
+            return self._send(200, data, "image/jpeg")
         if path in ("/", "/index.html", "/app"):
             return self._send(200, PAGE)
         return self._send(404, "not found")
