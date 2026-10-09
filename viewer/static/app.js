@@ -8,8 +8,8 @@ const PINNED = [
   'run_10_seed_213384163.ceiling_04.rgb_chunk_0000_segment_001_of_002.mp4',
   'run_7_seed_900334964.eye_04.rgb_chunk_0000_segment_002_of_002.mp4',
 ];
-const state = {clips: [], clip: null, meta: null, hidden: new Set(), activeKey: '', cite: null,
-               tmin: 0, tmax: 1, questions: [], clock: {}};
+const state = {clips: [], clip: null, meta: null, hidden: new Set(), hiddenLabels: new Set(),
+               activeKey: '', cite: null, tmin: 0, tmax: 1, questions: [], clock: {}};
 
 function colorFor(name) {
   let h = 0;
@@ -99,18 +99,13 @@ async function loadClips() {
     scene: 'warehouse', description: s.caption || '', t_start: s.t_start, t_end: s.t_end,
     source: 'vast', group: 'archive', in_archive: true,
   }));
-  // Event rule: no internet bridge_/garage_ clips in the VAST app — person_moving + warehouse only.
-  const local = d.clips.filter(c => {
-    const id = String(c.clip_id);
-    if (id.endsWith('_noaudio')) return false;
-    if (id.startsWith('bridge_') || id.startsWith('garage_')) return false;
-    return id.startsWith('person_moving');
-  }).map(c => Object.assign(c, {source: 'local', group: 'local'}));
+  const local = d.clips.filter(c => !String(c.clip_id).endsWith('_noaudio'))
+    .map(c => Object.assign(c, {source: 'local', group: 'local'}));
   state.clips = pinned.concat(local, archive);
   state.tmin = d.t_min; state.tmax = d.t_max;
   const sel = $('#clip');
   sel.innerHTML = '';
-  const groups = [['Warehouse — start here', pinned], ['Venue — person_moving', local], ['Rest of the archive', archive]];
+  const groups = [['Warehouse — start here', pinned], ['Local clips', local], ['Rest of the archive', archive]];
   for (const [label, items] of groups) {
     if (!items.length) continue;
     const g = document.createElement('optgroup');
@@ -170,6 +165,7 @@ async function selectClip(id, seekTo) {
   $('#clip').value = id;
   if (video.getAttribute('src') !== c.url) { video.src = c.url; video.load(); }
   state.hidden.clear();
+  state.hiddenLabels.clear();
   state.activeKey = '';
   if (c.source === 'vast') {
     state.meta = {has_sidecar: false, tracks: [], segments: [], zones: {}, in_db: false,
@@ -238,21 +234,31 @@ function renderQuestions() {
 async function renderVast(c) {
   $('#segcount').textContent = '';
   $('#segments').innerHTML = '<p class="meta">Loading claims…</p>';
-  try {
-    const d = await getJSON('../api/clip_claims?clip_id=' + encodeURIComponent(c.clip_id));
-    const claims = d.claims || [];
+  const q = encodeURIComponent(c.clip_id);
+  const [claimsRes, detRes] = await Promise.all([
+    getJSON('../api/clip_claims?clip_id=' + q).catch(e => ({error: e.message, claims: []})),
+    getJSON('../api/detections?clip_id=' + q).catch(e => ({error: e.message, frames: []})),
+  ]);
+  state.meta.detection_frames = detRes.frames || [];
+  state.meta.detection_note = detRes.note || detRes.error || '';
+  renderTracks();
+  const claims = claimsRes.claims || [];
+  if (claimsRes.error && !claims.length) {
+    $('#segcount').textContent = '';
+    $('#segments').innerHTML = `<p class="meta">${esc(claimsRes.error)}</p>`;
+  } else {
     $('#segcount').textContent = claims.length ? String(claims.length) : '(none)';
-    const cap = d.caption ? `<div class="action">${esc(d.caption)}</div>` : '';
+    const cap = claimsRes.caption ? `<div class="action">${esc(claimsRes.caption)}</div>` : '';
     const rows = claims.map(cl =>
       `<div class="claim"><span class="key">${esc(cl.entity)} / ${esc(cl.attribute)} @ ${esc(cl.location)}</span>`
       + `<span class="val">= ${esc(cl.value)}</span>${badge(String(cl.status || '').toUpperCase())}</div>`).join('');
+    const detNote = state.meta.detection_note
+      ? `<p class="meta">${esc(state.meta.detection_note)}</p>` : '';
     $('#segments').innerHTML = `<div class="seg active"><div class="title"><span>Indexed caption</span></div>${cap}`
-      + (rows || '<p class="meta">No claims stored for this segment.</p>') + `</div>`;
-    if (d.caption) state.clip.description = d.caption;
-  } catch (e) {
-    $('#segcount').textContent = '';
-    $('#segments').innerHTML = `<p class="meta">${esc(e.message)}</p>`;
+      + (rows || '<p class="meta">No claims stored for this segment.</p>') + detNote + `</div>`;
+    if (claimsRes.caption) state.clip.description = claimsRes.caption;
   }
+  draw(video.currentTime || 0);
 }
 
 // ------------------------------------------------------------ tracks --
@@ -273,8 +279,39 @@ function boxAt(tr, t) {  // last box with t_i <= t, if it is within ~1.5 frames 
   return (t - ts[lo] <= 1.5 * tr._dt) ? tr.boxes[lo] : null;
 }
 
+function detectionFrameAt(frames, t) {
+  if (!frames || !frames.length) return null;
+  let lo = 0, hi = frames.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (frames[mid].t <= t) lo = mid; else hi = mid - 1;
+  }
+  let best = frames[lo];
+  const next = frames[lo + 1];
+  if (next && Math.abs(next.t - t) < Math.abs(best.t - t)) best = next;
+  return Math.abs(best.t - t) <= 0.5 ? best : null;
+}
+
 function renderTracks() {
   const m = state.meta, box = $('#tracks');
+  const frames = (m && m.detection_frames) || [];
+  if (frames.length) {
+    const counts = {};
+    for (const fr of frames) for (const b of fr.boxes) counts[b.label] = (counts[b.label] || 0) + 1;
+    const labels = Object.keys(counts).sort();
+    $('#trackcount').textContent = `${frames.length} frames`;
+    box.innerHTML = labels.map(label =>
+      `<div class="track"><input type="checkbox" data-label="${esc(label)}" checked/>`
+      + `<span class="sw" style="background:${colorFor(label)}"></span><code>${esc(label)}</code>`
+      + `<span class="meta">${counts[label]} boxes</span></div>`).join('')
+      || '<p class="meta">Detection sidecar has no boxes.</p>';
+    box.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+      if (cb.checked) state.hiddenLabels.delete(cb.dataset.label);
+      else state.hiddenLabels.add(cb.dataset.label);
+      draw(video.currentTime);
+    }));
+    return;
+  }
   const tracks = (m && m.tracks) || [];
   $('#trackcount').textContent = tracks.length ? `${tracks.length}` : '(none — run viewer/detect.py)';
   const byTrack = {};
@@ -338,6 +375,18 @@ function draw(t) {
     const x = X(b[1]), y = Y(b[2]), w = b[3] * f.w, h = b[4] * f.h;
     ctx.lineWidth = 2; ctx.strokeStyle = tr._color; ctx.strokeRect(x, y, w, h);
     if (showLabels) label(x, y, `${tr.label}#${tr.track_id} ${b[5].toFixed(2)}`, tr._color, '#111');
+  }
+  const det = detectionFrameAt(m.detection_frames, t);
+  if (!det) return;
+  const vw = video.videoWidth || 1, vh = video.videoHeight || 1;
+  for (const b of det.boxes) {
+    if (state.hiddenLabels.has(b.label)) continue;
+    const nx = b.pixel ? b.x / vw : b.x, ny = b.pixel ? b.y / vh : b.y;
+    const nw = b.pixel ? b.w / vw : b.w, nh = b.pixel ? b.h / vh : b.h;
+    const x = X(nx), y = Y(ny), w = nw * f.w, h = nh * f.h;
+    const color = colorFor(b.label);
+    ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.strokeRect(x, y, w, h);
+    if (showLabels) label(x, y, `${b.label} ${(b.conf || 0).toFixed(2)}`, color, '#111');
   }
 }
 

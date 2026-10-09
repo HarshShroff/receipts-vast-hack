@@ -18,7 +18,7 @@ from answer import answer  # noqa: E402
 from claims import Store, fmt_t, parse_t  # noqa: E402
 from ingest_adapter import ingest_clip  # noqa: E402
 from naive import naive_answer  # noqa: E402
-from vss_source import VssSource, fetch_warehouse_segments, login  # noqa: E402
+from vss_source import VssSource, fetch_warehouse_segments, login, normalize_detections  # noqa: E402
 
 PORT = int(os.environ.get("PORT", "8080"))
 CAMERA = os.environ.get("CAMERA_ID", "sdg_warehouse_cam-2")
@@ -111,6 +111,34 @@ def _vss_stream_request(source):
 
 
 FRAME_CACHE = os.environ.get("FRAME_CACHE", "/tmp/receipts_frames")
+
+
+def fetch_detections(clip_id):
+    """YOLO sidecar for one warehouse segment, normalized for the browse overlay."""
+    import urllib.error
+    import urllib.request
+    from urllib.parse import quote
+    source = _resolve_source(clip_id, None)
+    backend = (STATE.get("backend") or "").rstrip("/")
+    token = STATE.get("token")
+    if not source:
+        return None
+    if not backend or not token:
+        return {"frames": [], "frame_count": 0, "error": "vss unavailable"}
+    url = f"{backend}/api/v1/videos/detections?source={quote(source, safe='')}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {"frames": [], "frame_count": 0, "note": "no detection sidecar"}
+        return {"frames": [], "frame_count": 0, "error": f"detections HTTP {e.code}"}
+    except Exception as e:
+        return {"frames": [], "frame_count": 0, "error": str(e)}
+    out = normalize_detections(payload)
+    out["clip_id"] = clip_id
+    return out
 
 
 def _resolve_source(clip_id=None, source=None):
@@ -1894,6 +1922,15 @@ class Handler(BaseHTTPRequestHandler):
             if detail is None:
                 return self._send(404, json.dumps({"error": "clip not found"}), "application/json")
             return self._send(200, json.dumps(detail), "application/json")
+        if path == "/api/detections":
+            if not STATE["ready"]:
+                return self._send(503, json.dumps({"error": "not ready"}), "application/json")
+            q = parse_qs(parsed.query)
+            found = fetch_detections((q.get("clip_id") or [None])[0])
+            if found is None:
+                return self._send(404, json.dumps({"error": "clip not found", "frames": []}),
+                                  "application/json")
+            return self._send(200, json.dumps(found), "application/json")
         if path == "/api/board":
             if not STATE["ready"]:
                 return self._send(503, json.dumps({"error": STATE["error"] or "not ready"}),

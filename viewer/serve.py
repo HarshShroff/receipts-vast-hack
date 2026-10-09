@@ -120,16 +120,13 @@ def api_questions():
 
 
 def _allow_local_clip(cid):
-    """VAST app: venue person_moving only — no YouTube bridge/garage internet clips."""
+    """Every clip in the folder. Skip the audio-stripped duplicate of person_moving."""
     c = (cid or "").lower()
-    if c.startswith("bridge_") or c.startswith("garage_"):
-        return False
-    if c.endswith("_noaudio"):
-        return False
-    return c.startswith("person_moving")
+    return bool(c) and not c.endswith("_noaudio")
 
 
 def api_clips():
+    """Every mp4 under the clips folder. Bridge and garage stay in the list with person_moving."""
     store = get_store()
     rows = db_rows(store)
     out = []

@@ -13,6 +13,7 @@ from vss_source import (  # noqa: E402
     caption_forklift_state,
     caption_to_claims,
     caption_worker_present,
+    normalize_detections,
     pin_zone,
     segments_from_explore,
     zone_named_in_caption,
@@ -194,6 +195,51 @@ class IngestIntegration(unittest.TestCase):
         blocked = [c for c in claims if c["attribute"] == "blocked"]
         self.assertEqual(len(blocked), 1)
         self.assertEqual(blocked[0]["entity"], "left_aisle")
+
+
+class NormalizeDetections(unittest.TestCase):
+    def test_pixel_bbox_uses_frame_shape(self):
+        out = normalize_detections({
+            "fps": 10,
+            "frames": [{
+                "time_sec": 1.5,
+                "shape": [100, 200],
+                "detections": [
+                    {"label": "forklift", "confidence": 0.8, "bbox": [20, 10, 60, 50]},
+                    {"label": "bad", "confidence": 0.1, "bbox": [1, 2]},
+                ],
+            }],
+        })
+        self.assertEqual(out["frame_count"], 1)
+        box = out["frames"][0]["boxes"][0]
+        self.assertEqual(box["label"], "forklift")
+        self.assertEqual(box["pixel"], False)
+        self.assertAlmostEqual(box["x"], 0.1)
+        self.assertAlmostEqual(box["y"], 0.1)
+        self.assertAlmostEqual(box["w"], 0.2)
+        self.assertAlmostEqual(box["h"], 0.4)
+        self.assertEqual(len(out["frames"][0]["boxes"]), 1)
+
+    def test_normalized_xyxy_stays_unit_interval(self):
+        out = normalize_detections({
+            "frames": [{"time_sec": 0, "detections": [
+                {"label": "person", "confidence": 0.5, "bbox": [0.1, 0.2, 0.4, 0.6]},
+            ]}],
+        })
+        box = out["frames"][0]["boxes"][0]
+        self.assertEqual(box["pixel"], False)
+        self.assertAlmostEqual(box["w"], 0.3)
+        self.assertAlmostEqual(box["h"], 0.4)
+
+    def test_pixels_without_shape_are_flagged(self):
+        out = normalize_detections({
+            "frames": [{"time_sec": 0.2, "detections": [
+                {"label": "person", "confidence": 0.9, "bbox": [10, 20, 30, 80]},
+            ]}],
+        })
+        box = out["frames"][0]["boxes"][0]
+        self.assertTrue(box["pixel"])
+        self.assertEqual((box["x"], box["y"], box["w"], box["h"]), (10, 20, 20, 60))
 
 
 if __name__ == "__main__":

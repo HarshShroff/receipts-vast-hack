@@ -383,6 +383,50 @@ def fetch_warehouse_segments(backend=None, token=None, *, camera_id="sdg_warehou
     return segments_from_explore(payload, camera_id=camera_id, location=location), backend, token
 
 
+def normalize_detections(payload):
+    """VSS /videos/detections sidecar → frames of normalized boxes.
+
+    Each box is {label, conf, x, y, w, h} with x,y the top-left. Pixel bboxes
+    (xyxy) are divided by frame shape [h, w]. Values already in 0..1 stay as
+    xyxy normalized. If the sidecar has pixel coords but no shape, pixel=True
+    and the browser divides by the video size.
+    """
+    if not isinstance(payload, dict):
+        return {"frames": [], "frame_count": 0}
+    video_shape = payload.get("video_shape") or []
+    frames = []
+    for fr in payload.get("frames") or []:
+        shape = fr.get("shape") or video_shape
+        height = width = None
+        if isinstance(shape, (list, tuple)) and len(shape) >= 2:
+            height, width = float(shape[0] or 0), float(shape[1] or 0)
+        boxes = []
+        for det in fr.get("detections") or []:
+            bbox = det.get("bbox") or []
+            if len(bbox) < 4:
+                continue
+            x1, y1, x2, y2 = (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+            bw, bh = x2 - x1, y2 - y1
+            if bw <= 0 or bh <= 0:
+                continue
+            pixel = False
+            if width and height and max(abs(x2), abs(y2), abs(x1), abs(y1)) > 1.5:
+                x, y, bw, bh = x1 / width, y1 / height, bw / width, bh / height
+            elif max(abs(x2), abs(y2), abs(x1), abs(y1)) > 1.5:
+                pixel = True
+                x, y = x1, y1
+            else:
+                x, y = x1, y1
+            boxes.append({
+                "label": str(det.get("label") or "object"),
+                "conf": float(det.get("confidence") or 0),
+                "x": x, "y": y, "w": bw, "h": bh, "pixel": pixel,
+            })
+        frames.append({"t": float(fr.get("time_sec") or 0), "boxes": boxes})
+    frames.sort(key=lambda item: item["t"])
+    return {"fps": payload.get("fps"), "frames": frames, "frame_count": len(frames)}
+
+
 class VssSource(ClaimSource):
     """ClaimSource over a clip dict that already carries a Cosmos caption.
 
