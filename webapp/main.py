@@ -1563,6 +1563,7 @@ let demoRunning=false;
 let demoIdx=-1;
 let demoAutoTimer=null;
 let demoBeats=[];
+let demoManual=false;  // Next/Space/→ cancels auto for the rest of this run
 const DEMO_BEAT_MS=6000;
 
 function findSeg(re){
@@ -1613,12 +1614,18 @@ function setDemoCaption(i, text){
 }
 function clearDemoUi(){
   if(demoAutoTimer){ clearTimeout(demoAutoTimer); demoAutoTimer=null; }
+  demoManual=false;
   const cap=$('demoCaption');
   if(cap){ cap.hidden=true; cap.classList.remove('show'); cap.innerHTML=''; }
   const nxt=$('demoNext');
   if(nxt) nxt.hidden=true;
   const slot=$('naive-slot');
   if(slot) slot.classList.remove('demo-hl');
+}
+function enterDemoManual(){
+  // Any manual Next/Space/→: cancel auto-advance for the rest of this run.
+  demoManual=true;
+  if(demoAutoTimer){ clearTimeout(demoAutoTimer); demoAutoTimer=null; }
 }
 function demoScrollTo(el){
   if(!el) return;
@@ -1698,16 +1705,18 @@ async function playDemoBeat(i){
   }, 0);
 }
 function scheduleDemoAuto(){
+  if(demoManual) return;
   if(demoAutoTimer) clearTimeout(demoAutoTimer);
   if(demoIdx < 0 || demoIdx >= demoBeats.length-1){ demoRunning=false; return; }
   demoAutoTimer=setTimeout(async ()=>{
+    if(demoManual) return;
     await playDemoBeat(demoIdx+1);
-    scheduleDemoAuto();
+    if(!demoManual) scheduleDemoAuto();
   }, DEMO_BEAT_MS);
 }
 async function demoNextBeat(){
   if(!demoBeats.length) return;
-  if(demoAutoTimer){ clearTimeout(demoAutoTimer); demoAutoTimer=null; }
+  enterDemoManual();
   if(demoIdx < 0){ await playDemoBeat(0); demoRunning=true; return; }
   if(demoIdx >= demoBeats.length-1){ demoRunning=false; return; }
   await playDemoBeat(demoIdx+1);
@@ -1719,6 +1728,7 @@ async function runDemo(){
   clearDemoUi();
   demoBeats=buildDemoBeats();
   demoRunning=true;
+  demoManual=false;
   demoIdx=-1;
   const nxt=$('demoNext');
   if(nxt) nxt.hidden=false;
@@ -1731,7 +1741,11 @@ document.addEventListener('keydown',(e)=>{
   if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
   if(e.key==='d'||e.key==='D'){ e.preventDefault(); runDemo(); return; }
   if(e.key===' ' || e.key==='ArrowRight'){
-    if(demoBeats.length){ e.preventDefault(); demoNextBeat(); }
+    if(!demoBeats.length) return;
+    // After beat 4: swallow Space/→ so they don't scroll or activate links.
+    if(demoIdx >= demoBeats.length-1){ e.preventDefault(); return; }
+    e.preventDefault();
+    demoNextBeat();
   }
 });
 
