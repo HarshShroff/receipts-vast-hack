@@ -188,6 +188,7 @@ def extract_frames(clip_id, source, n=5):
 
 def segment_playlist():
     """Ordered clips for the hero player (clip_id, times, path)."""
+    from urllib.parse import quote
     store = STATE["store"]
     if not store:
         return []
@@ -201,7 +202,7 @@ def segment_playlist():
         "t_end": r["t_end"],
         "caption": (r["description"] or "")[:240],
         "stream_url": stream_url(r["path"], clip_id=r["clip_id"]),
-        "frames_url": f"api/frames?clip_id={__import__('urllib.parse').quote(r['clip_id'], safe='')}",
+        "frames_url": f"api/frames?clip_id={quote(r['clip_id'], safe='')}",
     } for r in rows]
 
 
@@ -1306,8 +1307,9 @@ class Handler(BaseHTTPRequestHandler):
                 n = max(3, min(n, 6))
                 paths = extract_frames(clip_id or source, source, n=n)
                 # Serve as multipart-ish JSON with data URLs is heavy; list indexed URLs.
+                from urllib.parse import quote as _quote
                 urls = [
-                    f"api/frame_file?clip_id={__import__('urllib.parse').quote(clip_id or '', safe='')}&i={i}"
+                    f"api/frame_file?clip_id={_quote(clip_id or '', safe='')}&i={i}"
                     for i in range(len(paths))
                 ]
                 # Stash paths for frame_file

@@ -41,10 +41,17 @@ FROM claims c WHERE c.status != 'superseded';
 
 
 def parse_t(x):
-    """'10:42' / '10:42:30' / number -> float seconds."""
+    """'10:42' / '10:42:30' / number -> float seconds.
+
+    Bare numerics (query strings, JSON, slider values) are already seconds.
+    Only colon forms are treated as clock times.
+    """
     if isinstance(x, (int, float)):
         return float(x)
-    parts = [float(p) for p in str(x).split(":")]
+    s = str(x).strip()
+    if re.fullmatch(r"[+-]?\d+(?:\.\d+)?", s):
+        return float(s)
+    parts = [float(p) for p in s.split(":")]
     while len(parts) < 3:
         parts.append(0.0)
     return parts[0] * 3600 + parts[1] * 60 + parts[2]

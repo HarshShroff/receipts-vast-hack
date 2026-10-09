@@ -111,6 +111,27 @@ class Flags(unittest.TestCase):
         self.assertEqual(rows[0]["unobserved_seconds"], parse_t("10:50") - parse_t("10:15"))  # footage runs to 10:50
 
 
+class TimeParsing(unittest.TestCase):
+    def test_bare_numeric_string_is_seconds_not_hours(self):
+        # Slider/query as_of values are seconds; "28667" must not become 28667*3600.
+        self.assertEqual(parse_t("28667"), 28667.0)
+        self.assertEqual(parse_t(28667), 28667.0)
+        self.assertEqual(parse_t("07:57:47"), 28667.0)
+
+    def test_as_of_at_footage_end_not_stale(self):
+        s = Store()
+        s.add_clip("A", 100.0, 200.0)
+        ingest_claim(s, "forklift", "state", "parked", "A", 150.0, 200.0, "cam")
+        end = 200.0
+        r = answer(s, ("forklift", "state", "cam"), end, max_age=3600)
+        self.assertFalse(r["stale"])
+        self.assertEqual(r["status"], "active")
+        # Same when as_of arrives as a bare seconds string (HTTP query).
+        r2 = answer(s, ("forklift", "state", "cam"), "200", max_age=3600)
+        self.assertFalse(r2["stale"])
+        self.assertEqual(r2["answer"], "parked")
+
+
 class Scoring(unittest.TestCase):
     def test_iou(self):
         self.assertAlmostEqual(iou((0, 10), (5, 15)), 5 / 15)
