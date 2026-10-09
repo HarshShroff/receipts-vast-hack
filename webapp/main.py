@@ -807,7 +807,7 @@ PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>RECEIPTS — video answers that know when they're out of date</title>
+<title>RECEIPTS — a video agent with memory</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -826,9 +826,8 @@ body{margin:0;min-height:100vh;color:var(--fg);
 }
 header{padding:.85rem 1.25rem .55rem;display:flex;flex-wrap:wrap;align-items:flex-end;gap:1rem;justify-content:space-between;
   border-bottom:1px solid var(--line)}
-header h1{font-family:Syne,sans-serif;font-size:clamp(1.35rem,3.2vw,1.95rem);letter-spacing:.01em;margin:0;line-height:1.05}
-header h1 span{color:var(--accent)}
-header .memory{font-family:Syne,sans-serif;font-size:clamp(1.05rem,2.4vw,1.45rem);font-weight:700;color:#f2f5f1;margin:.45rem 0 0;max-width:48rem;line-height:1.25;letter-spacing:.01em}
+header h1{font-family:Syne,sans-serif;font-size:clamp(1.55rem,3.6vw,2.2rem);letter-spacing:.02em;margin:0;line-height:1.05;color:var(--accent)}
+header .memory{font-family:Syne,sans-serif;font-size:clamp(1.15rem,2.6vw,1.55rem);font-weight:700;color:#f2f5f1;margin:.4rem 0 0;max-width:48rem;line-height:1.25;letter-spacing:.01em}
 header .tagline{color:var(--muted);font-size:.78rem;margin:.35rem 0 0;max-width:42rem;line-height:1.4}
 .pages{display:flex;gap:.4rem;margin:.55rem 0 0}
 .pages a{border:1px solid var(--accent);padding:.35rem .7rem;color:var(--accent);text-decoration:none;font-size:.78rem;letter-spacing:.06em}
@@ -967,7 +966,7 @@ a.cmp-link{text-decoration:none;display:inline-block;opacity:.85}
 <body>
 <header>
   <div>
-    <h1>RECEIPTS <span>— video answers that know when they're out of date</span></h1>
+    <h1>RECEIPTS</h1>
     <p class="memory">A video agent with memory, that knows when its answers are out of date.</p>
     <p class="tagline">Every answer cites its clip. When newer footage contradicts it, the answer changes. When the footage stops, it says so. · <code id="camLabel">sdg_warehouse_cam-2</code></p>
   </div>
@@ -1678,7 +1677,7 @@ let demoRunning=false;
 let demoIdx=-1;
 let demoAutoTimer=null;
 let demoBeats=[];
-let demoManual=false;  // Next/Space/→ cancels auto for the rest of this run
+let demoManual=true;  // Run demo is always manual; Next/Space/→ advances one beat
 const DEMO_BEAT_MS=6000;
 
 function findSeg(re){
@@ -1850,12 +1849,11 @@ async function runDemo(){
   clearDemoUi();
   demoBeats=buildDemoBeats();
   demoRunning=true;
-  demoManual=false;
+  demoManual=true;  // no auto-advance — stay on beat 1 until Next/Space/→
   demoIdx=-1;
   const nxt=$('demoNext');
   if(nxt) nxt.hidden=false;
   await playDemoBeat(0);
-  scheduleDemoAuto();
 }
 $('runDemo').addEventListener('click', runDemo);
 $('demoNext').addEventListener('click', ()=>{ demoNextBeat(); });
