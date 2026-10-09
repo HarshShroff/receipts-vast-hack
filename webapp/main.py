@@ -858,8 +858,10 @@ main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
 #demoCaption .beat{color:var(--muted);font-size:.72rem;margin-right:.5rem}
 #winTip{margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--line);background:#152018;color:var(--fg);font-size:.88rem;letter-spacing:.01em}
 #winTip[hidden]{display:none!important}
-button.demo-btn.next{border-color:var(--accent);color:var(--accent)}
 .naive-card.demo-hl{outline:2px solid var(--accent);outline-offset:2px;background:#1e2a22}
+.agentqa-card .lead{font-size:.88rem;font-weight:500;line-height:1.4;white-space:pre-wrap;max-height:7.5em;overflow:hidden}
+.agentqa-card .lead.expanded{max-height:none}
+.agentqa-card .more{margin-top:.35rem;background:transparent;border:0;color:var(--accent);font:inherit;font-size:.72rem;cursor:pointer;padding:0}
 #naive-slot.demo-hl .naive-card{outline:2px solid var(--red);outline-offset:2px}
 @keyframes stalePulse{0%{box-shadow:0 0 0 0 rgba(228,87,74,.55)}70%{box-shadow:0 0 0 12px rgba(228,87,74,0)}100%{box-shadow:0 0 0 0 rgba(228,87,74,0)}}
 #timeStrip.stale-pulse,#askOut.stale-pulse{animation:stalePulse .9s ease-out 1;border-color:var(--red)!important;background:#2a1e1c}
@@ -871,6 +873,9 @@ section h2{font-family:Syne,sans-serif;font-size:.95rem;letter-spacing:.08em;mar
 .ask-row input[type=text]{flex:1;min-width:220px;background:#0e1210;border:1px solid var(--line);color:var(--fg);
   padding:.65rem .75rem;font:inherit;font-size:.88rem}
 .ask-row button,.demo-btn{background:var(--accent);color:#0b120e;border:0;padding:.65rem 1rem;font:inherit;font-weight:600;cursor:pointer}
+button.demo-btn.next{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+.scrub-wrap{position:relative}
+.scrub-nofootage{position:absolute;right:0;top:1.1rem;height:10px;background:rgba(228,87,74,.2);pointer-events:none;border-left:1px dashed var(--red)}
 .presets{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0 0}
 .presets button{background:transparent;border:1px solid var(--line);color:var(--muted);padding:.3rem .5rem;font:inherit;font-size:.68rem;cursor:pointer}
 .presets button:hover{border-color:var(--accent);color:var(--fg)}
@@ -932,7 +937,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   </div>
   <div class="live-ctl">
     <button type="button" class="demo-btn" id="runDemo">Run demo</button>
-    <button type="button" class="demo-btn next" id="demoNext" hidden>Next →</button>
+    <button type="button" class="demo-btn next" id="demoNext" hidden>Next -&gt;</button>
     <label><span class="live-dot" id="liveDot"></span>
       <input type="checkbox" id="liveToggle"/> LIVE
     </label>
@@ -989,10 +994,11 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
 
   <section>
     <h2>TIMELINE</h2>
-    <div class="scrub">
+    <div class="scrub scrub-wrap">
       <label class="meta">Time scrubber (as_of)
         <input id="scrub" type="range" min="0" max="1" step="1" value="0"/>
       </label>
+      <div id="scrubNoFootage" class="scrub-nofootage" hidden title="no footage"></div>
     </div>
     <div class="timeline" id="timeline"></div>
     <p class="meta" id="tlMeta"></p>
@@ -1046,9 +1052,23 @@ function toast(msg){
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));}
 function setScrub(v){
   const sl=$('scrub');
-  sl.value=Math.round(v);
-  asOf=Number(sl.value);
+  const t=Math.round(Number(v));
+  // Extend max before assigning — range inputs clamp value to [min,max].
+  if(t > Number(sl.max)) sl.max=t;
+  sl.value=t;
+  asOf=t;  // trust intended time (do not re-read a clamped value)
   $('asofLabel').textContent=fmt(asOf);
+  updateScrubNoFootage();
+}
+function updateScrubNoFootage(){
+  const sl=$('scrub'), mark=$('scrubNoFootage');
+  if(!sl||!mark||!meta.ready) return;
+  const footageEnd=Math.ceil(meta.t_max);
+  const max=Number(sl.max);
+  if(max<=footageEnd){ mark.hidden=true; return; }
+  mark.hidden=false;
+  const span=Math.max(1, max-Number(sl.min));
+  mark.style.width=((max-footageEnd)/span*100)+'%';
 }
 function shortClip(id){
   if(!id) return '—';
@@ -1247,11 +1267,13 @@ async function init(){
   });
   const sl=$('scrub');
   sl.min=Math.floor(meta.t_min);
-  sl.max=Math.ceil(meta.t_max);
+  // ~3 min past footage end so users can scrub into the STALE zone by hand.
+  sl.max=Math.ceil(meta.t_max)+180;
   if(!liveOn){
     const demo=meta.demo_as_of!=null ? meta.demo_as_of : meta.t_max;
     setScrub(demo);
   } else setScrub(Math.max(sl.min, asOf||sl.min));
+  updateScrubNoFootage();
   $('segLabel').textContent=meta.ready
     ? (meta.segment_count+' segments · '+fmt(meta.t_min)+' → '+fmt(meta.t_max))
     : ('Not ready: '+(meta.error||'building store…'));
@@ -1328,10 +1350,34 @@ function leadAnswer(q, d){
   }
   return String(d.answer)+' (as of '+d.as_of_fmt+')';
 }
-async function doAsk(){
+let askSeq=0;
+let agentQaCtrl=null;
+function abortAgentQa(){
+  if(agentQaCtrl){ try{ agentQaCtrl.abort(); }catch(e){} agentQaCtrl=null; }
+}
+async function doAsk(opts){
+  opts=opts||{};
+  // Demo passes asOf explicitly so a slow/clamped scrubber cannot win.
+  if(opts.asOf!=null){
+    const t=Math.round(Number(opts.asOf));
+    const sl=$('scrub');
+    if(sl){ if(t>Number(sl.max)) sl.max=t; sl.value=t; }
+    asOf=t;
+    if($('asofLabel')) $('asofLabel').textContent=fmt(asOf);
+  } else {
+    // Manual Answer: always sync from the scrubber.
+    const sl=$('scrub');
+    if(sl) asOf=Number(sl.value);
+  }
   const q=$('q').value;
+  const seq=++askSeq;
+  const wantAgentQa=opts.agentQa!==false;
+  // Never let a prior agent-qa hold the beat's /api/ask behind it.
+  if(wantAgentQa) abortAgentQa();
+  else abortAgentQa();
   const r=await fetch('api/ask?q='+encodeURIComponent(q)+'&as_of='+encodeURIComponent(asOf));
   const d=await r.json();
+  if(seq!==askSeq) return d;  // superseded by a newer ask
   window._lastAsk=d;
   const el=$('askOut');
   el.style.display='block';
@@ -1361,10 +1407,15 @@ async function doAsk(){
     }, {autoplay:true, highlight:[d.t_start,d.t_end]});
     refreshTimeline();
   }
+  // Critical path first: answer card + strip + hero. agent-qa never blocks a beat.
   updateTimeStrip(d);
-  renderNaive(q,d);
-  renderAgentQa(q);  // async; never blocks the board
   renderChangedHero(d);
+  renderNaive(q,d);
+  if(wantAgentQa){
+    const qq=q;
+    setTimeout(()=>{ if(seq===askSeq) renderAgentQa(qq); }, 0);
+  }
+  return d;
 }
 
 function updateTimeStrip(d){
@@ -1405,6 +1456,14 @@ async function renderNaive(q, receipts){
 }
 
 let agentQaOk=false;  // only feature in demo scroll when live agent-qa returns ok:true
+function plainAgentText(s){
+  let t=String(s||'');
+  t=t.replace(/\*\*([^*]+)\*\*/g,'$1');
+  t=t.replace(/^#{1,6}\s*/gm,'');
+  t=t.replace(/^\s*\*\*|\*\*\s*$/gm,'');
+  t=t.replace(/\n{3,}/g,'\n\n').trim();
+  return t;
+}
 async function renderAgentQa(q){
   const slot=$('agentqa-slot');
   if(!slot) return;
@@ -1414,38 +1473,42 @@ async function renderAgentQa(q){
     const timer=ctrl?setTimeout(()=>ctrl.abort(),10000):null;
     const r=await fetch('api/agentqa?q='+encodeURIComponent(q), ctrl?{signal:ctrl.signal}:{});
     if(timer) clearTimeout(timer);
-    if(!r.ok){ agentQaOk=false; slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">agent-qa unavailable: HTTP '+r.status+'</p><p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>'; return; }
+    if(!r.ok){ agentQaOk=false; slot.innerHTML=''; return; }
     const n=await r.json();
-    if(!n.ok){
-      agentQaOk=false;
-      slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">agent-qa unavailable: '+esc(n.error||'error')+'</p><p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>';
-      return;
-    }
+    if(!n.ok){ agentQaOk=false; slot.innerHTML=''; return; }
     agentQaOk=true;
-    const ans=(n.answer==null||n.answer==='')?'(empty)':String(n.answer);
+    const ans=plainAgentText((n.answer==null||n.answer==='')?'(empty)':String(n.answer));
     const ev=n.evidence_source?shortClip(n.evidence_source):'—';
     const when=n.evidence_abs_t!=null?fmt(n.evidence_abs_t):(
       (n.evidence_start_s!=null||n.evidence_end_s!=null)
         ? (String(n.evidence_start_s??'—')+'–'+String(n.evidence_end_s??'—')+'s rel')
         : '—'
     );
+    const long=ans.split('\n').length>6 || ans.length>420;
     slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3>'
-      +'<div class="lead">'+esc(ans)+'</div>'
+      +'<div class="lead" id="agentqaLead">'+esc(ans)+'</div>'
+      +(long?'<button type="button" class="more" id="agentqaMore">more</button>':'')
       +'<p class="meta">Evidence '+esc(ev)+' · '+esc(when)
       +(n.model_id?' · '+esc(n.model_id):'')+'</p>'
       +'<p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>';
+    const more=$('agentqaMore'), lead=$('agentqaLead');
+    if(more&&lead) more.onclick=()=>{ lead.classList.toggle('expanded'); more.textContent=lead.classList.contains('expanded')?'less':'more'; };
   }catch(e){
     agentQaOk=false;
-    slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">agent-qa unavailable: '+esc(e.message||e)+'</p><p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>';
+    slot.innerHTML='';
   }
 }
 
 function renderChangedHero(d){
   const el=$('changedHero');
   if(!el) return;
+  // Latest supersede at/before as_of: last superseded claim in history → current answer.
   const hist=(d&&d.history)||[];
   if(!d||!d.answer||!hist.length){ el.style.display='none'; el.innerHTML=''; return; }
   const old=hist[hist.length-1];
+  if(String(old.value).toLowerCase()===String(d.answer).toLowerCase()){
+    el.style.display='none'; el.innerHTML=''; return;
+  }
   el.style.display='block';
   el.innerHTML='<h3>ANSWER CHANGED</h3><div class="hero-cols">'
     +'<div class="hero-card before" id="heroBefore" title="'+esc(old.clip_id||'')+'"><div class="meta">BEFORE</div><div class="val">'+esc(old.value)
@@ -1537,10 +1600,35 @@ async function playDemoBeat(i){
   const slot=$('naive-slot');
   if(slot) slot.classList.remove('demo-hl');
   const sl=$('scrub');
-  if(beat.t > Number(sl.max)) sl.max=beat.t;
-  setScrub(beat.t);
+  const t=Math.round(Number(beat.t));
+  // Critical: raise max then set asOf from t (not from a clamped range readback).
+  if(t > Number(sl.max)) sl.max=t;
+  asOf=t;
+  sl.value=t;
+  $('asofLabel').textContent=fmt(asOf);
+  updateScrubNoFootage();
   await refreshBoard();
-  await doAsk();
+  let d=await doAsk();
+  // Beat 4 must land STALE at as_of past footage end — re-query if needed.
+  if(beat.mode==='stale'){
+    if(!d||!d.stale){
+      asOf=t;
+      sl.max=Math.max(Number(sl.max), t);
+      sl.value=t;
+      d=await doAsk();
+    }
+    if(d&&d.stale){
+      const strip=$('timeStrip'), ask=$('askOut');
+      if(strip){ strip.classList.add('stale','stale-pulse'); setTimeout(()=>strip.classList.remove('stale-pulse'),1000); }
+      if(ask){ ask.classList.add('stale-pulse'); setTimeout(()=>ask.classList.remove('stale-pulse'),1000); }
+      demoScrollTo($('staleBanner')||strip||ask);
+      setTimeout(()=>demoScrollTo(ask||strip), 350);
+      toast('Demo complete — supersede + stale on the same question');
+    } else {
+      toast('Beat 4: expected STALE at '+fmt(t)+' — check /api/ask?as_of='+t);
+    }
+    return;
+  }
   if(beat.mode==='ask' && beat.clip){
     playClip(beat.clip,{autoplay:true,highlight:[beat.clip.t_start,beat.clip.t_end]});
   }
@@ -1556,15 +1644,7 @@ async function playDemoBeat(i){
     if(beat.mode==='supersede') demoScrollTo($('changedHero')||$('heroVideo'));
   } else if(beat.mode==='naive'){
     demoScrollTo(slot||$('naive-slot'));
-    // Feature agent-qa card only when it returned a real answer (do not scroll to errors).
     if(agentQaOk) setTimeout(()=>demoScrollTo($('agentqa-slot')), 400);
-  } else if(beat.mode==='stale'){
-    const strip=$('timeStrip'), ask=$('askOut');
-    if(strip){ strip.classList.add('stale','stale-pulse'); setTimeout(()=>strip.classList.remove('stale-pulse'),1000); }
-    if(ask){ ask.classList.add('stale-pulse'); setTimeout(()=>ask.classList.remove('stale-pulse'),1000); }
-    demoScrollTo($('staleBanner')||strip||ask);
-    setTimeout(()=>demoScrollTo(ask||strip), 350);
-    toast('Demo complete — supersede + stale on the same question');
   }
 }
 function scheduleDemoAuto(){
