@@ -83,5 +83,18 @@ class Sets(unittest.TestCase):
         self.assertIsNone(sv.api_compare("../etc"))
 
 
+class Citation(unittest.TestCase):
+    def test_inside_counts_and_wide_needs_iou(self):
+        w = (100.0, 110.0)
+        self.assertTrue(cmp.interval_contains(w, (104.0, 105.0)))   # precise moment inside a long label
+        self.assertTrue(cmp.interval_contains(w, (100.0, 110.0)))
+        self.assertTrue(cmp.interval_contains(w, (105.0, 105.0)))   # instant inside
+        self.assertTrue(cmp.interval_contains(w, (99.0, 110.5)))    # slightly wider, IoU >= 0.5
+        self.assertFalse(cmp.interval_contains(w, (95.0, 101.0)))   # mostly outside
+        self.assertFalse(cmp.interval_contains(w, (111.0, 111.0)))
+        self.assertFalse(cmp.interval_contains(None, (104.0, 105.0)))
+        self.assertFalse(cmp.interval_contains(w, None))
+
+
 if __name__ == "__main__":
     unittest.main()

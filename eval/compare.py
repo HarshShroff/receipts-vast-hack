@@ -142,11 +142,14 @@ def cited_interval(result):
 def interval_contains(window, point_iv):
     if not window or not point_iv:
         return False
-    # A cited instant counts if it falls inside the labeled window.
-    # A cited range counts if its overlap with the window has IoU >= 0.5,
-    # or if the range is a point inside the window.
+    # A cited instant or range counts if it lies inside the labeled window (a precise citation of
+    # one moment of a long labeled state is right), or if it overlaps the window with IoU >= 0.5
+    # (a citation a little wider than the label).
+    eps = 1e-6
+    if window[0] - eps <= point_iv[0] and point_iv[1] <= window[1] + eps:
+        return True
     if point_iv[0] == point_iv[1]:
-        return window[0] <= point_iv[0] <= window[1]
+        return False
     return iou(window, point_iv) >= 0.5
 
 

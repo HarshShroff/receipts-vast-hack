@@ -62,7 +62,7 @@
     "Gemini Flash, full video to as_of (gemini-3.8-flash)": {
       "n": 9,
       "exact": 9,
-      "cited_in_interval": 4,
+      "cited_in_interval": 6,
       "answered": 8,
       "stale_claim": 0,
       "stale_flag_ok": 9,
@@ -806,7 +806,7 @@
           32768.5,
           32769.5
         ],
-        "cited_in_interval": false,
+        "cited_in_interval": true,
         "time_restricted": true,
         "model_id": "gemini-3.8-flash",
         "note": "Vehicles are driving smoothly under the bridge with no obstructions blocking the roadway.",
@@ -899,7 +899,7 @@
           32845.0,
           32848.0
         ],
-        "cited_in_interval": false,
+        "cited_in_interval": true,
         "time_restricted": true,
         "model_id": "gemini-3.8-flash",
         "note": "The truck has backed into a side street and vehicles are freely driving through the underpass.",

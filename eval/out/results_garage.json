@@ -62,7 +62,7 @@
     "Gemini Flash, full video to as_of (gemini-3.8-flash)": {
       "n": 7,
       "exact": 7,
-      "cited_in_interval": 1,
+      "cited_in_interval": 5,
       "answered": 7,
       "stale_claim": 0,
       "stale_flag_ok": 7,
@@ -661,7 +661,7 @@
           64800.0,
           64805.5
         ],
-        "cited_in_interval": false,
+        "cited_in_interval": true,
         "time_restricted": true,
         "model_id": "gemini-3.8-flash",
         "note": "The garage floor is cluttered with various objects, including boxes, a garden hose, buckets, and chairs.",
@@ -723,7 +723,7 @@
           64862.0,
           64864.5
         ],
-        "cited_in_interval": false,
+        "cited_in_interval": true,
         "time_restricted": true,
         "model_id": "gemini-3.8-flash",
         "note": "The garage floor has been cleaned and cleared of the scattered boxes, hose, and clutter that were previously present.",
@@ -754,7 +754,7 @@
           64864.0,
           64865.0
         ],
-        "cited_in_interval": false,
+        "cited_in_interval": true,
         "time_restricted": true,
         "model_id": "gemini-3.8-flash",
         "note": "The garage door remains fully open, showing the outdoor driveway and evening sky.",
@@ -847,7 +847,7 @@
           64864.0,
           64865.0
         ],
-        "cited_in_interval": false,
+        "cited_in_interval": true,
         "time_restricted": true,
         "model_id": "gemini-3.8-flash",
         "note": "The garage floor has been cleared and the red bucket is no longer present.",
