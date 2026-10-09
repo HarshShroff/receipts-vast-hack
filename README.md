@@ -1,5 +1,8 @@
 # Receipts
 
+![Run demo beat 4 — STALE after the camera stops, with the retrieval-only card still answering](docs/run-demo-stale.png)
+
+
 **Video answers that know when they're out of date.** Every answer cites the exact clip and timestamps it came from. When newer footage contradicts it, the answer changes and shows both clips. When the footage stops, it says so instead of guessing.
 
 - **Live app:** https://team-5-app.thecosmoslabs.com/app/ (press **Run demo**)
