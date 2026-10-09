@@ -961,6 +961,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
 .naive-card{background:#1a1c1d;border:1px solid #3a3a3a;padding:.9rem;color:#c8c8c8}
 .naive-card h3{margin:0 0 .4rem;font-family:Syne,sans-serif;font-size:.9rem;color:#aaa}
 .naive-card .outdated{color:var(--red);font-size:.75rem;margin-top:.5rem}
+a.cmp-link{text-decoration:none;display:inline-block;opacity:.85}
 </style>
 </head>
 <body>
@@ -973,6 +974,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   <div class="live-ctl">
     <button type="button" class="demo-btn" id="runDemo">Run demo</button>
     <button type="button" class="demo-btn next" id="demoNext" hidden>Next -&gt;</button>
+    <a class="demo-btn cmp-link" href="browse/compare">Compare models</a>
     <label><span class="live-dot" id="liveDot"></span>
       <input type="checkbox" id="liveToggle"/> LIVE
     </label>
