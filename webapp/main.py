@@ -464,7 +464,7 @@ def _tile_from_answer(tid, label, sub, entity, attribute, r, as_of, stale_banner
             (r["claim_id"],)).fetchone()
         if ev and ev["m"] is not None:
             last = ev["m"]
-    age = (as_of - last) if last is not None else None
+    age = max(0.0, as_of - last) if last is not None else None
     stale = bool(r.get("stale")) or force_stale
     unconfirmed = bool(r.get("unconfirmed")) or r.get("answer") is None
     if attribute == "state":
@@ -512,36 +512,38 @@ def board(as_of):
     store = STATE["store"]
     as_of = parse_t(as_of)
     cov = store.coverage_end(as_of)
+    footage_end = STATE["t_max"]
     tiles = []
     banner = (
         f"NO FOOTAGE SINCE {fmt_t(cov)} — may be stale"
         if cov is not None and (as_of - cov) > STALE_BANNER_GAP else None
     )
     gap_stale = bool(banner)
-    # Forklift first — hero tile (scoped to playing segment)
-    r = answer_for_playing_clip(store, ("forklift", "state", CAMERA), as_of, max_age=3600)
+    # Tiles = claim valid at as_of (same answer() the ask card uses).
+    r = answer(store, ("forklift", "state", CAMERA), as_of, max_age=3600)
+    r = dict(r, unconfirmed=r.get("answer") is None)
     tiles.append(_tile_from_answer(
         "forklift_state", "FORKLIFT", camera_label(), "forklift", "state", r, as_of,
         stale_banner=banner, force_stale=gap_stale,
     ))
-    # Camera-scoped worker_present for the playing clip only.
-    r = answer_for_playing_clip(
-        store, (CAMERA, "worker_present", CAMERA), as_of, max_age=3600)
+    r = answer(store, (CAMERA, "worker_present", CAMERA), as_of, max_age=3600)
+    r = dict(r, unconfirmed=r.get("answer") is None)
     tiles.append(_tile_from_answer(
         f"worker_{CAMERA}", "WORKER PRESENT", camera_label(), CAMERA, "worker_present",
         r, as_of,
     ))
     for zone in ZONES:
-        r = answer_for_playing_clip(
-            store, (zone, "worker_present", CAMERA), as_of, max_age=3600)
+        r = answer(store, (zone, "worker_present", CAMERA), as_of, max_age=3600)
         if r["answer"] is not None:
+            r = dict(r, unconfirmed=False)
             tiles.append(_tile_from_answer(
                 f"worker_{zone}", "WORKER PRESENT",
                 f"{camera_label()} · {zone.replace('_', ' ')}",
                 zone, "worker_present", r, as_of,
             ))
-        rb = answer_for_playing_clip(store, (zone, "blocked", CAMERA), as_of, max_age=3600)
+        rb = answer(store, (zone, "blocked", CAMERA), as_of, max_age=3600)
         if rb["answer"] is not None:
+            rb = dict(rb, unconfirmed=False)
             tiles.append(_tile_from_answer(
                 f"blocked_{zone}", "AISLE BLOCKED",
                 f"{camera_label()} · {zone.replace('_', ' ')}",
@@ -553,6 +555,8 @@ def board(as_of):
         "as_of_fmt": fmt_t(as_of),
         "coverage_end": cov,
         "coverage_end_fmt": fmt_t(cov) if cov is not None else None,
+        "footage_end": footage_end,
+        "footage_end_fmt": fmt_t(footage_end) if footage_end is not None else None,
         "camera_id": CAMERA,
         "playing_clip_id": playing["clip_id"] if playing else None,
         "tiles": tiles,
@@ -812,6 +816,12 @@ main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
 .clock{color:var(--muted);font-size:.75rem;margin:.35rem 0 .45rem}
 #timeStrip{font-size:.82rem;letter-spacing:.02em;padding:.45rem .65rem;border:1px solid var(--line);background:var(--panel);margin:.2rem 0 .55rem}
 #timeStrip.stale{background:#2a1e1c;border-color:#5a3530;color:#f0b4ae}
+#demoCaption{display:none;margin:.35rem 0 .55rem;padding:.55rem .75rem;border:1px solid var(--accent);background:#152018;color:var(--fg);font-size:.9rem;letter-spacing:.01em}
+#demoCaption.show{display:block}
+#demoCaption .beat{color:var(--muted);font-size:.72rem;margin-right:.5rem}
+button.demo-btn.next{border-color:var(--accent);color:var(--accent)}
+.naive-card.demo-hl{outline:2px solid var(--accent);outline-offset:2px;background:#1e2a22}
+#naive-slot.demo-hl .naive-card{outline:2px solid var(--red);outline-offset:2px}
 .banner{margin:.5rem 0;padding:.5rem .7rem;background:#2a1e1c;border:1px solid #5a3530;color:#f0b4ae;font-size:.75rem}
 #evalPanel img{display:block}
 section{margin-top:1.35rem}
@@ -878,6 +888,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   </div>
   <div class="live-ctl">
     <button type="button" class="demo-btn" id="runDemo" title="key d">Run demo</button>
+    <button type="button" class="demo-btn next" id="demoNext" hidden title="Space / →">Next →</button>
     <label><span class="live-dot" id="liveDot"></span>
       <input type="checkbox" id="liveToggle"/> LIVE
     </label>
@@ -885,6 +896,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
   </div>
 </header>
 <main>
+  <div id="demoCaption" hidden></div>
   <div id="timeStrip" class="clock">Answer as of — · evidence — · footage ends —</div>
   <div class="clock"><span id="segLabel">…</span> · scrubber <strong id="asofLabel">—</strong> · coverage <span id="covLabel">—</span></div>
   <div id="staleBanner" class="banner" hidden></div>
@@ -1131,13 +1143,13 @@ async function refreshBoard(){
   let evAge='—';
   const ages=d.tiles.map(t=>t.age_sec).filter(a=>a!=null&&isFinite(a));
   if(ages.length){
-    const sec=Math.min(...ages);
-    evAge=sec<60?(Math.round(sec)+'s old'):(Math.floor(sec/60)+'m '+(Math.round(sec)%60)+'s old');
+    const sec=Math.max(0,Math.round(Math.min(...ages)));
+    evAge=sec<60?(sec+'s old'):(Math.floor(sec/60)+'m '+(sec%60)+'s old');
   }
   const strip=$('timeStrip');
   if(strip){
-    strip.textContent='Answer as of '+fmt(asOf)+' · evidence '+evAge
-      +' · footage ends '+(d.coverage_end_fmt||fmt(meta.t_max));
+    const ends=d.footage_end_fmt||fmt(meta.t_max);
+    strip.textContent='Answer as of '+fmt(asOf)+' · evidence '+evAge+' · footage ends '+ends;
     strip.classList.toggle('stale', anyStale);
   }
   // Keep player on segment for current as_of unless live/ask owns it
@@ -1311,13 +1323,13 @@ function updateTimeStrip(d){
   const el=$('timeStrip');
   if(!el) return;
   const asf=(d&&d.as_of_fmt)||fmt(asOf);
-  const cov=$('covLabel').textContent||meta.coverage_end_fmt||fmt(meta.t_max);
+  const ends=(d&&d.footage_end_fmt)||fmt(meta.t_max);
   let age='—';
   if(d&&d.t_end!=null){
     const sec=Math.max(0,Math.round(asOf-d.t_end));
     age=sec<60?(sec+'s old'):(Math.floor(sec/60)+'m '+(sec%60)+'s old');
   }
-  el.textContent='Answer as of '+asf+' · evidence '+age+' · footage ends '+cov;
+  el.textContent='Answer as of '+asf+' · evidence '+age+' · footage ends '+ends;
   el.classList.toggle('stale', !!(d&&d.stale));
 }
 
@@ -1365,32 +1377,129 @@ function renderChangedHero(d){
 }
 
 let demoRunning=false;
-async function runDemo(){
-  if(demoRunning||!meta.ready) return;
-  demoRunning=true;
-  try{
-    const cam=meta.camera_id||'sdg_warehouse_cam-2';
-    $('q').value='Is the forklift on '+cam+' moving?';
-    // Land on supersede moment (parked after moving)
-    setScrub(meta.demo_as_of!=null?meta.demo_as_of:meta.t_max);
-    await refreshBoard();
-    await doAsk();
-    await new Promise(r=>setTimeout(r,2500));
-    // Scrub past end of coverage → STALE
-    const past=Math.ceil((meta.t_max||asOf)+180);
-    const sl=$('scrub');
-    if(Number(sl.max)<past) sl.max=past;
-    setScrub(past);
-    await refreshBoard();
-    await doAsk();
+let demoIdx=-1;
+let demoAutoTimer=null;
+let demoBeats=[];
+const DEMO_BEAT_MS=6000;
+
+function findSeg(re){
+  return (meta.segments||[]).find(s=>re.test(s.clip_id||''));
+}
+function buildDemoBeats(){
+  // Prefer ceiling_03 seg001 → later parked, else eye_04 seg001→seg002 (times that exist).
+  let move=findSeg(/ceiling_03\.rgb_chunk_0000_segment_001/);
+  let park=null;
+  if(move){
+    park=(meta.segments||[]).find(s=>s.t_start>=move.t_end && /segment_00/.test(s.clip_id||'')
+      && (s.clip_id||'').includes('ceiling_04'));
+  }
+  if(!move || !park){
+    move=findSeg(/eye_04\.rgb_chunk_0000_segment_001/);
+    park=findSeg(/eye_04\.rgb_chunk_0000_segment_002/);
+    if(move && park && park.t_start < move.t_start){
+      const later=(meta.segments||[]).filter(s=>/eye_04\.rgb_chunk_0000_segment_002/.test(s.clip_id||'') && s.t_start>=move.t_start);
+      park=later[0]||park;
+    }
+  }
+  if(!move || !park){
+    const tPark=meta.demo_as_of!=null?meta.demo_as_of:meta.t_max;
+    move={t_end:tPark-51, clip_id:'', t_start:tPark-56};
+    park={t_end:tPark, clip_id:(meta.demo_clip||{}).clip_id||'', t_start:tPark-5};
+  }
+  const tMove=move.t_end;
+  const tPark=park.t_end;
+  const tStop=Math.ceil((meta.t_max||tPark)+180); // ~08:00:47 when t_max is 07:57:47
+  const camShort='cam-2';
+  return [
+    {t:tMove, clip:move, mode:'ask',
+      caption:'Q: Is the forklift on '+camShort+' moving? (as of '+fmt(tMove)+')'},
+    {t:tPark, clip:park, mode:'supersede',
+      caption:'Newer footage arrives ('+fmt(tPark)+')'},
+    {t:tPark, clip:park, mode:'naive',
+      caption:'A retrieval-only agent, same captions'},
+    {t:tStop, clip:null, mode:'stale',
+      caption:'The camera stops. Ask again at '+fmt(tStop)},
+  ];
+}
+function setDemoCaption(i, text){
+  const el=$('demoCaption');
+  if(!el) return;
+  el.hidden=false;
+  el.classList.add('show');
+  el.innerHTML='<span class="beat">DEMO '+(i+1)+'/'+demoBeats.length+'</span>'+esc(text);
+}
+function clearDemoUi(){
+  if(demoAutoTimer){ clearTimeout(demoAutoTimer); demoAutoTimer=null; }
+  const cap=$('demoCaption');
+  if(cap){ cap.hidden=true; cap.classList.remove('show'); cap.innerHTML=''; }
+  const nxt=$('demoNext');
+  if(nxt) nxt.hidden=true;
+  const slot=$('naive-slot');
+  if(slot) slot.classList.remove('demo-hl');
+}
+async function playDemoBeat(i){
+  if(!meta.ready || i<0 || i>=demoBeats.length) return;
+  demoIdx=i;
+  const beat=demoBeats[i];
+  const cam=meta.camera_id||'sdg_warehouse_cam-2';
+  $('q').value='Is the forklift on '+cam+' moving?';
+  setDemoCaption(i, beat.caption);
+  const nxt=$('demoNext');
+  if(nxt) nxt.hidden=(i>=demoBeats.length-1);
+  const slot=$('naive-slot');
+  if(slot) slot.classList.remove('demo-hl');
+  const sl=$('scrub');
+  if(beat.t > Number(sl.max)) sl.max=beat.t;
+  setScrub(beat.t);
+  await refreshBoard();
+  await doAsk();
+  if(beat.mode==='ask' && beat.clip){
+    playClip(beat.clip,{autoplay:true,highlight:[beat.clip.t_start,beat.clip.t_end]});
+  }
+  if(beat.mode==='supersede' && beat.clip){
+    playClip(beat.clip,{autoplay:true,highlight:[beat.clip.t_start,beat.clip.t_end]});
+  }
+  if(beat.mode==='naive'){
+    if(slot){ slot.classList.add('demo-hl'); slot.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  }
+  if(beat.mode==='stale'){
     toast('Demo complete — supersede + stale on the same question');
-  } finally { demoRunning=false; }
+  }
+}
+function scheduleDemoAuto(){
+  if(demoAutoTimer) clearTimeout(demoAutoTimer);
+  if(demoIdx < 0 || demoIdx >= demoBeats.length-1){ demoRunning=false; return; }
+  demoAutoTimer=setTimeout(async ()=>{
+    await playDemoBeat(demoIdx+1);
+    scheduleDemoAuto();
+  }, DEMO_BEAT_MS);
+}
+async function demoNextBeat(){
+  if(!demoBeats.length) return;
+  if(demoAutoTimer){ clearTimeout(demoAutoTimer); demoAutoTimer=null; }
+  if(demoIdx < 0){ await playDemoBeat(0); demoRunning=true; return; }
+  if(demoIdx >= demoBeats.length-1){ demoRunning=false; return; }
+  await playDemoBeat(demoIdx+1);
+  if(demoIdx >= demoBeats.length-1) demoRunning=false;
+}
+async function runDemo(){
+  if(!meta.ready) return;
+  clearDemoUi();
+  demoBeats=buildDemoBeats();
+  demoRunning=true;
+  demoIdx=-1;
+  const nxt=$('demoNext');
+  if(nxt) nxt.hidden=false;
+  await playDemoBeat(0);
+  scheduleDemoAuto();
 }
 $('runDemo').addEventListener('click', runDemo);
+$('demoNext').addEventListener('click', ()=>{ demoNextBeat(); });
 document.addEventListener('keydown',(e)=>{
-  if(e.key==='d'||e.key==='D'){
-    if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
-    e.preventDefault(); runDemo();
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+  if(e.key==='d'||e.key==='D'){ e.preventDefault(); runDemo(); return; }
+  if(e.key===' ' || e.key==='ArrowRight'){
+    if(demoBeats.length){ e.preventDefault(); demoNextBeat(); }
   }
 });
 

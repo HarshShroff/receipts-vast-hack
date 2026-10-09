@@ -57,7 +57,7 @@ def parse_t(x):
 def fmt_t(s):
     s = int(round(s))
     h, m, sec = s // 3600, s % 3600 // 60, s % 60
-    return f"{h:02d}:{m:02d}" + (f":{sec:02d}" if sec else "")
+    return f"{h:02d}:{m:02d}:{sec:02d}"
 
 
 def norm(v):
