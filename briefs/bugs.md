@@ -1,0 +1,6 @@
+# Bugs seen on https://team-5-app.thecosmoslabs.com/app/ (12:45 ET), fix in the demo pass
+
+1. as_of unit bug. Slider at max shows "QUESTION TIME 07:57:47" but the answer says "as_of 28667:00" and "last confirmed 07:57:42, 1719542 min before as_of". The slider value and answer() as_of are in different units/epochs. With the slider at the end of footage, the answer must NOT be stale (last confirmed 5 s before as_of, max_age 60 min). Add a test: as_of == footage end -> not stale.
+2. Status badge shows "STALE · rule SUPERSEDE_NEWER_CONTRADICTS" on an ACTIVE answer. Show the claim's status (ACTIVE / SUPERSEDED) and the stale flag separately; show the rule that created the current claim, not an unrelated one.
+3. Cited clip video never loads (spinner forever). Serve the segment via a working URL (presigned S3 or proxied through the app) or fall back to a thumbnail frame + the S3 path. Never leave a dead player in the demo.
+4. Default view should open on a moment where a supersede is visible (e.g. forklift on cam-2 moving -> parked), not an empty form.
