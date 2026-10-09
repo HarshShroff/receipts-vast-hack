@@ -119,11 +119,23 @@ def api_questions():
     return {"questions": questions, "clip_clock": clock, "label": data.get("_label", "")}
 
 
+def _allow_local_clip(cid):
+    """VAST app: venue person_moving only — no YouTube bridge/garage internet clips."""
+    c = (cid or "").lower()
+    if c.startswith("bridge_") or c.startswith("garage_"):
+        return False
+    if c.endswith("_noaudio"):
+        return False
+    return c.startswith("person_moving")
+
+
 def api_clips():
     store = get_store()
     rows = db_rows(store)
     out = []
     for cid, path in clip_paths().items():
+        if not _allow_local_clip(cid):
+            continue
         meta = get_meta(path)
         row = rows.get(cid)
         tl = (meta or {}).get("timeline") or {}

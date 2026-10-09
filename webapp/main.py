@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from agentqa import agentqa_answer  # noqa: E402
 from answer import answer  # noqa: E402
 from claims import Store, fmt_t, parse_t  # noqa: E402
 from ingest_adapter import ingest_clip  # noqa: E402
@@ -869,8 +870,11 @@ section h2{font-family:Syne,sans-serif;font-size:.95rem;letter-spacing:.08em;mar
 .presets{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0 0}
 .presets button{background:transparent;border:1px solid var(--line);color:var(--muted);padding:.3rem .5rem;font:inherit;font-size:.68rem;cursor:pointer}
 .presets button:hover{border-color:var(--accent);color:var(--fg)}
-.answer-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.85rem}
-@media (max-width:900px){.answer-row{grid-template-columns:1fr}}
+.answer-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:.85rem}
+@media (max-width:1100px){.answer-row{grid-template-columns:1fr}}
+.agentqa-card{background:#1a1c1d;border:1px solid #3a3a3a;padding:.9rem;color:#c8c8c8}
+.agentqa-card h3{margin:0 0 .4rem;font-family:Syne,sans-serif;font-size:.9rem;color:#aaa}
+.agentqa-card .grey{color:#8a8a8a;font-size:.72rem;margin-top:.45rem}
 #askOut{background:var(--panel);border:1px solid var(--line);padding:.9rem;display:none}
 #naive-slot{min-height:1px}
 .badge{display:inline-block;padding:.12rem .45rem;font-size:.66rem;letter-spacing:.06em;font-weight:700}
@@ -978,6 +982,7 @@ footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
     <div class="answer-row">
       <div id="askOut"></div>
       <div id="naive-slot"></div>
+      <div id="agentqa-slot"></div>
     </div>
   </section>
 
@@ -1356,6 +1361,7 @@ async function doAsk(){
   }
   updateTimeStrip(d);
   renderNaive(q,d);
+  renderAgentQa(q);  // async; never blocks the board
   renderChangedHero(d);
 }
 
@@ -1394,6 +1400,42 @@ async function renderNaive(q, receipts){
     +(n.caption?'<div class="quote">“'+esc((n.caption||'').slice(0,320))+'”</div>':'')
     +'<p class="meta">No timestamp · '+esc(n.method||'')+'</p>'
     +out+'</div>';
+}
+
+let agentQaOk=false;  // only feature in demo scroll when live agent-qa returns ok:true
+async function renderAgentQa(q){
+  const slot=$('agentqa-slot');
+  if(!slot) return;
+  slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">Asking…</p></div>';
+  try{
+    const ctrl=AbortController?new AbortController():null;
+    const timer=ctrl?setTimeout(()=>ctrl.abort(),10000):null;
+    const r=await fetch('api/agentqa?q='+encodeURIComponent(q), ctrl?{signal:ctrl.signal}:{});
+    if(timer) clearTimeout(timer);
+    if(!r.ok){ agentQaOk=false; slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">agent-qa unavailable: HTTP '+r.status+'</p><p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>'; return; }
+    const n=await r.json();
+    if(!n.ok){
+      agentQaOk=false;
+      slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">agent-qa unavailable: '+esc(n.error||'error')+'</p><p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>';
+      return;
+    }
+    agentQaOk=true;
+    const ans=(n.answer==null||n.answer==='')?'(empty)':String(n.answer);
+    const ev=n.evidence_source?shortClip(n.evidence_source):'—';
+    const when=n.evidence_abs_t!=null?fmt(n.evidence_abs_t):(
+      (n.evidence_start_s!=null||n.evidence_end_s!=null)
+        ? (String(n.evidence_start_s??'—')+'–'+String(n.evidence_end_s??'—')+'s rel')
+        : '—'
+    );
+    slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3>'
+      +'<div class="lead">'+esc(ans)+'</div>'
+      +'<p class="meta">Evidence '+esc(ev)+' · '+esc(when)
+      +(n.model_id?' · '+esc(n.model_id):'')+'</p>'
+      +'<p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>';
+  }catch(e){
+    agentQaOk=false;
+    slot.innerHTML='<div class="agentqa-card"><h3>Event VSS agent (agent-qa)</h3><p class="grey">agent-qa unavailable: '+esc(e.message||e)+'</p><p class="grey">Searches the whole archive; no as_of cutoff, no stale flag.</p></div>';
+  }
 }
 
 function renderChangedHero(d){
@@ -1512,6 +1554,8 @@ async function playDemoBeat(i){
     if(beat.mode==='supersede') demoScrollTo($('changedHero')||$('heroVideo'));
   } else if(beat.mode==='naive'){
     demoScrollTo(slot||$('naive-slot'));
+    // Feature agent-qa card only when it returned a real answer (do not scroll to errors).
+    if(agentQaOk) setTimeout(()=>demoScrollTo($('agentqa-slot')), 400);
   } else if(beat.mode==='stale'){
     demoScrollTo($('staleBanner')||$('timeStrip')||$('askOut'));
     setTimeout(()=>demoScrollTo($('askOut')||$('timeStrip')), 350);
@@ -1567,6 +1611,19 @@ document.querySelectorAll('.presets button').forEach(b=>{
   var base=p.endsWith('/') ? p : p.replace(/[^/]*$/, '');
   if(!base.endsWith('/')) base+='/';
   link.href=base+'browse/';
+  // Hide Browse if the page or person_moving clip is unavailable.
+  fetch(base+'browse/', {method:'GET'}).then(function(r){
+    if(!r.ok){ link.style.display='none'; return null; }
+    return fetch(base+'browse/api/clips');
+  }).then(function(r){
+    if(!r) return;
+    if(!r.ok){ link.style.display='none'; return null; }
+    return r.json();
+  }).then(function(d){
+    if(!d) return;
+    var ok=(d.clips||[]).some(function(c){ return String(c.clip_id||'').indexOf('person_moving')===0; });
+    if(!ok) link.style.display='none';
+  }).catch(function(){ link.style.display='none'; });
 })();
 setInterval(()=>{ if(meta.ready && !document.hidden) refreshBoard(); }, 2500);
 init();
@@ -1802,6 +1859,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(naive_answer(
                 STATE["store"], question, entity, attribute, camera_id=CAMERA,
             )), "application/json")
+        if path == "/api/agentqa":
+            q = parse_qs(parsed.query)
+            question = (q.get("q") or [""])[0]
+            return self._send(200, json.dumps(agentqa_answer(question)), "application/json")
         if path == "/api/live":
             if not STATE["ready"]:
                 return self._send(503, json.dumps({"error": "not ready"}), "application/json")

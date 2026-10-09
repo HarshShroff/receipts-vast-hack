@@ -99,12 +99,18 @@ async function loadClips() {
     scene: 'warehouse', description: s.caption || '', t_start: s.t_start, t_end: s.t_end,
     source: 'vast', group: 'archive', in_archive: true,
   }));
-  const local = d.clips.filter(c => !String(c.clip_id).endsWith('_noaudio')).map(c => Object.assign(c, {source: 'local', group: 'local'}));
+  // Event rule: no internet bridge_/garage_ clips in the VAST app — person_moving + warehouse only.
+  const local = d.clips.filter(c => {
+    const id = String(c.clip_id);
+    if (id.endsWith('_noaudio')) return false;
+    if (id.startsWith('bridge_') || id.startsWith('garage_')) return false;
+    return id.startsWith('person_moving');
+  }).map(c => Object.assign(c, {source: 'local', group: 'local'}));
   state.clips = pinned.concat(local, archive);
   state.tmin = d.t_min; state.tmax = d.t_max;
   const sel = $('#clip');
   sel.innerHTML = '';
-  const groups = [['Warehouse — start here', pinned], ['Local clips', local], ['Rest of the archive', archive]];
+  const groups = [['Warehouse — start here', pinned], ['Venue — person_moving', local], ['Rest of the archive', archive]];
   for (const [label, items] of groups) {
     if (!items.length) continue;
     const g = document.createElement('optgroup');

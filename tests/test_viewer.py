@@ -274,7 +274,11 @@ class ServeHandlers(unittest.TestCase):
         code, _, body = self.get("/browse/api/clips")
         d = json.loads(body)
         self.assertEqual(code, 200)
-        self.assertEqual(d["clips"][0]["clip_id"], "bridge_01_road_clear")
+        # Listing excludes bridge_/garage_ (event rule); person_moving remains.
+        self.assertEqual([c["clip_id"] for c in d["clips"]], ["person_moving"])
+        code, _, body = self.get("/browse/clips/person_moving.mp4", {"Range": "bytes=0-3"})
+        self.assertEqual((code, body), (206, bytes(range(4))))
+        # Direct path to bridge file still serves (filter is list-only).
         code, _, body = self.get("/browse/clips/bridge_01_road_clear.mp4", {"Range": "bytes=0-3"})
         self.assertEqual((code, body), (206, bytes(range(4))))
         code, _, body = self.get("/browse/")
@@ -297,9 +301,9 @@ class ServeHandlers(unittest.TestCase):
         code, _, body = self.get("/api/clips")
         d = json.loads(body)
         self.assertEqual(code, 200)
-        self.assertEqual([c["clip_id"] for c in d["clips"]], BRIDGE + ["person_moving"])
-        self.assertEqual(d["clips"][0]["url"], "clips/bridge_01_road_clear.mp4")
-        self.assertAlmostEqual(d["t_max"], 9.009 + 35.001633 + 10.01 + 8.633333, places=3)
+        self.assertEqual([c["clip_id"] for c in d["clips"]], ["person_moving"])
+        self.assertEqual(d["clips"][0]["url"], "clips/person_moving.mp4")
+        # Meta for bridge clips still works when requested by id (not listed).
         _, _, body = self.get("/api/clips/bridge_01_road_clear/meta")
         db = json.loads(body)["segments"][0]["claims"][0]["db"]
         self.assertEqual((db["status"], db["created_rule"], db["rule_fired"], db["sighting"]),
