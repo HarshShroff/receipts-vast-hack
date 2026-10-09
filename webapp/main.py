@@ -1045,7 +1045,7 @@ a.cmp-link{text-decoration:none;display:inline-block;opacity:.85}
 
   <section id="evalPanel">
     <h2>EVAL</h2>
-    <p class="meta">Own footage filmed at the venue today, 6 hand-labeled questions. Same claims for every system, so this isolates time handling. After the camera stopped, the 4 baselines answered with confidence; Receipts flagged stale. Labels: <code>eval/questions_real.json</code>.</p>
+    <p class="meta">Own footage filmed at the venue today, 6 hand-labeled questions. The four memory-based baselines answered with confidence after the camera stopped; Receipts flagged stale. Gemini Flash, re-watching the clip per question, also caught it; Receipts does it from stored claims with cited clips.</p>
     <img src="results_real.png" alt="Receipts vs baselines on venue clip" style="max-width:100%;border:1px solid var(--line);margin-top:.5rem;background:#0e1210"/>
   </section>
 </main>

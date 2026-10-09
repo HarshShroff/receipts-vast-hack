@@ -129,6 +129,8 @@ def _allow_local_clip(cid):
 
 
 EVAL_DIR = os.path.join(ROOT, "eval")
+# VAST app deploy sets COMPARE_VENUE_ONLY=1 so /compare never lists YouTube bridge/garage sets.
+COMPARE_VENUE_ONLY = os.environ.get("COMPARE_VENUE_ONLY", "").lower() in ("1", "true", "yes")
 
 
 def compare_sets():
@@ -138,6 +140,8 @@ def compare_sets():
         if not (f.startswith("questions_") and f.endswith(".json")):
             continue
         name = f[len("questions_"):-len(".json")]
+        if COMPARE_VENUE_ONLY and name != "real":
+            continue
         try:
             with open(os.path.join(EVAL_DIR, f), encoding="utf-8") as fh:
                 d = json.load(fh)
@@ -157,6 +161,8 @@ def api_compare(set_name="real"):
     """Model comparison for one question set: questions, the scene's clips on their clock, and the
     committed eval results (eval/compare.py output). Read-only; never calls a model."""
     if not set_name.replace("_", "").isalnum():
+        return None
+    if COMPARE_VENUE_ONLY and set_name != "real":
         return None
     qpath = os.path.join(EVAL_DIR, f"questions_{set_name}.json")
     rpath = RESULTS_PATH if set_name == "real" else os.path.join(EVAL_DIR, "out", f"results_{set_name}.json")
