@@ -171,6 +171,19 @@ class VssAgentClient:
         }
 
 
+def _wandb_headers(key, extra=None):
+    """W&B Inference bills usage to a team/project, sent as the OpenAI-Project header.
+    Set WANDB_PROJECT_PATH="<team>/<project>" (or WANDB_ENTITY; project defaults to receipts-vast-hack)."""
+    h = {"Authorization": "Bearer " + key}
+    path = os.environ.get("WANDB_PROJECT_PATH", "").strip()
+    if not path and os.environ.get("WANDB_ENTITY", "").strip():
+        path = os.environ["WANDB_ENTITY"].strip() + "/" + os.environ.get("WANDB_PROJECT", "receipts-vast-hack")
+    if path:
+        h["OpenAI-Project"] = path
+    h.update(extra or {})
+    return h
+
+
 def wandb_chat(prompt, model=None, base_url=None):
     """One W&B inference chat completion. Key from WANDB_API_KEY. Returns (text, model_id)."""
     key = os.environ.get("WANDB_API_KEY", "").strip()
@@ -179,7 +192,7 @@ def wandb_chat(prompt, model=None, base_url=None):
     model = model or os.environ.get("WANDB_MODEL", "").strip()
     base = (base_url or os.environ.get("WANDB_BASE_URL") or "https://api.inference.wandb.ai/v1").rstrip("/")
     if not model:
-        req = urllib.request.Request(base + "/models", headers={"Authorization": "Bearer " + key})
+        req = urllib.request.Request(base + "/models", headers=_wandb_headers(key))
         with urllib.request.urlopen(req, timeout=60) as r:
             listing = json.loads(r.read().decode())
         rows = listing.get("data") or []
@@ -195,9 +208,12 @@ def wandb_chat(prompt, model=None, base_url=None):
     req = urllib.request.Request(
         base + "/chat/completions",
         data=json.dumps(payload).encode(),
-        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+        headers=_wandb_headers(key, {"Content-Type": "application/json"}),
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as r:
-        data = json.loads(r.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"W&B inference HTTP {e.code}: {e.read().decode(errors='replace')[:300]}") from None
     return data["choices"][0]["message"]["content"] or "", model

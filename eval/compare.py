@@ -114,7 +114,12 @@ def score_one(system, store, questions):
         r = system.answer(store, q["question"], q["question_key"], q["as_of"])
         exp_iv = [parse_t(t) for t in q["expected_interval"]] if q["expected_interval"] else None
         got = cited_interval(r)
-        ok = norm(r.get("answer")) == norm(q["expected_answer"])
+        after_footage = q.get("category") == "after-footage"
+        if after_footage:
+            # Nothing was observed at as_of: the right behaviour is a stale flag, with or without the last known value.
+            ok = bool(r.get("stale"))
+        else:
+            ok = norm(r.get("answer")) == norm(q["expected_answer"])
         inside = bool(exp_iv) and interval_contains(tuple(exp_iv), got)
         exact += ok
         if got is not None:
@@ -123,9 +128,9 @@ def score_one(system, store, questions):
             answered += 1
             if answer_is_stale(store, r, parse_t(q["as_of"])):
                 stale_used += 1
-        if q.get("category") == "after-footage" or q.get("expected_answer") is None and q.get("expected_stale"):
+        if after_footage:
             after_n += 1
-            after_ok += bool(r.get("stale")) and r.get("answer") is None
+            after_ok += bool(r.get("stale"))
         stale_flag_ok += bool(r.get("stale")) == bool(q.get("expected_stale", False))
         rows.append({
             "id": q["id"],
@@ -157,20 +162,26 @@ def bar_chart(summaries, path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     names = list(summaries)
-    exact = [summaries[n]["exact"] for n in names]
-    cited = [summaries[n]["cited_in_interval"] for n in names]
+    ran = [summaries[n]["answered"] > 0 for n in names]
+    exact = [summaries[n]["exact"] if r else 0 for n, r in zip(names, ran)]
+    cited = [summaries[n]["cited_in_interval"] if r else 0 for n, r in zip(names, ran)]
+    stale = [summaries[n]["stale_claim"] if r else 0 for n, r in zip(names, ran)]
     x = range(len(names))
-    fig, ax = plt.subplots(figsize=(8, 4))
-    w = 0.35
-    ax.bar([i - w / 2 for i in x], exact, w, label="exact answer")
-    ax.bar([i + w / 2 for i in x], cited, w, label="cited time in labeled interval")
+    fig, ax = plt.subplots(figsize=(9, 5))
+    w = 0.27
+    ax.bar([i - w for i in x], exact, w, label="correct (after-footage: flagged stale)")
+    ax.bar(list(x), cited, w, label="cited time inside labeled interval")
+    ax.bar([i + w for i in x], stale, w, label="answered from outdated state", color="#c0392b")
+    n = next(iter(summaries.values()))["n"]
+    for i, r in zip(x, ran):
+        if not r:
+            ax.text(i, 0.4, "did not run", ha="center", va="bottom", rotation=90, color="#777", fontsize=9)
     ax.set_xticks(list(x))
     ax.set_xticklabels(names, rotation=20, ha="right")
-    n = next(iter(summaries.values()))["n"]
     ax.set_ylabel(f"count out of {n}")
     ax.set_ylim(0, max(n, 1))
-    ax.set_title(f"person_moving position questions (n={n})")
-    ax.legend()
+    ax.set_title(f"Own venue clip, hand-labeled positions (n={n}); claims = labels, so this tests time logic, not extraction", fontsize=9)
+    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, frameon=False)
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
@@ -222,7 +233,8 @@ def main(argv=None):
             try:
                 text, model = wandb_chat(prompt)
             except Exception as e:
-                notes.append(f"W&B inference failed: {type(e).__name__}")
+                if f"W&B inference failed: {e}" not in notes:
+                    notes.append(f"W&B inference failed: {e}")
                 return '{"answer": null, "cited_time_s": null}'
             holder["model"] = model
             llm.model_id = model
