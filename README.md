@@ -40,8 +40,9 @@ What this build actually called:
 - **NVIDIA Cosmos Reason** — segment captions (`reasoning_content`); **Cosmos Embed** — via hybrid search during discovery
 - **CoreWeave** — GPUs serving the reasoner/embedder (and detector) in the team pipeline
 - **Cursor** — agent + skills for health, retrieval, re-ingest, and deploy-app-no-registry
+- **Weights & Biases** — eval results table and chart logged per run (`eval/compare.py`); example: [run kvzklxkd](https://wandb.ai/harshrofff-na/receipts-vast-hack/runs/kvzklxkd)
 
-Not used in this path: YOLO detections, W&B inference.
+Not used in this path: YOLO detections, W&B inference, or Weave tracing.
 
 ## Evaluation, with caveats
 

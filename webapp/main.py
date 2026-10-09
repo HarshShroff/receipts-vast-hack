@@ -376,134 +376,179 @@ def tile_tone(attribute, value, stale):
     return "amber"
 
 
+def clip_covering(as_of):
+    """Clip row under the scrubber / hero player at as_of, or None."""
+    store = STATE["store"]
+    if not store:
+        return None
+    as_of = parse_t(as_of)
+    row = store.db.execute(
+        "SELECT clip_id, path, t_start, t_end FROM clips "
+        "WHERE t_start <= ? AND t_end >= ? ORDER BY t_start DESC LIMIT 1",
+        (as_of, as_of)).fetchone()
+    if row:
+        return row
+    # Prefer the last clip that ended at/before as_of (matches player fallback).
+    return store.db.execute(
+        "SELECT clip_id, path, t_start, t_end FROM clips "
+        "WHERE t_end <= ? ORDER BY t_end DESC LIMIT 1",
+        (as_of,)).fetchone()
+
+
+def answer_for_playing_clip(store, key, as_of, max_age=3600):
+    """Board tiles: only the claim for the clip under as_of, else unconfirmed.
+
+    Carrying a prior segment's YES/NO onto a different playing clip is how we get
+    'WORKER PRESENT: NO' while the hero video clearly shows a person.
+    """
+    as_of = parse_t(as_of)
+    entity, attribute, location = key
+    seg = clip_covering(as_of)
+    empty = {
+        "answer": None, "claim_id": None, "clip_id": seg["clip_id"] if seg else None,
+        "t_start": seg["t_start"] if seg else None, "t_end": seg["t_end"] if seg else None,
+        "status": "no_evidence", "stale": False, "stale_reason": None,
+        "data_gap_note": "unconfirmed for the playing segment",
+        "history": [], "unconfirmed": True,
+    }
+    if not seg:
+        return empty
+    row = store.db.execute("""
+        SELECT c.id, c.value, c.status, c.clip_id, c.t_start, c.t_end, c.observed_at,
+               e.clip_id AS ev_clip, e.t_start AS ev_t_start, e.t_end AS ev_t_end,
+               e.observed_at AS ev_obs
+        FROM claims c
+        JOIN evidence e ON e.claim_id = c.id
+        WHERE c.entity=? AND c.attribute=? AND c.location=?
+          AND e.clip_id=? AND e.observed_at <= ?
+          AND (c.superseded_by IS NULL OR EXISTS (
+                SELECT 1 FROM claims s WHERE s.id = c.superseded_by AND s.observed_at > ?
+              ))
+        ORDER BY e.observed_at DESC, c.id DESC LIMIT 1
+    """, (entity, attribute, location, seg["clip_id"], as_of, as_of)).fetchone()
+    if not row:
+        return empty
+    out = answer(store, key, as_of, max_age=max_age)
+    # Re-bind to the playing-clip evidence (answer() may pick a different clip).
+    out.update(
+        answer=row["value"], claim_id=row["id"], clip_id=row["ev_clip"],
+        t_start=row["ev_t_start"], t_end=row["ev_t_end"], status="active",
+        unconfirmed=False,
+    )
+    reasons = []
+    age = as_of - row["ev_obs"]
+    if age > max_age:
+        reasons.append(f"last confirmed {fmt_t(row['ev_obs'])}, before as_of")
+    cov = store.coverage_end(as_of)
+    if cov is not None and cov < as_of:
+        reasons.append(f"footage ends {fmt_t(cov)}, before as_of {fmt_t(as_of)}")
+    if reasons:
+        out.update(stale=True, status="stale", stale_reason="; ".join(reasons))
+    else:
+        out.update(stale=False, stale_reason=None)
+    return out
+
+
+def _tile_from_answer(tid, label, sub, entity, attribute, r, as_of, stale_banner=None,
+                      force_stale=False):
+    last = r.get("t_end")
+    if r.get("claim_id") and STATE["store"]:
+        ev = STATE["store"].db.execute(
+            "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
+            (r["claim_id"],)).fetchone()
+        if ev and ev["m"] is not None:
+            last = ev["m"]
+    age = (as_of - last) if last is not None else None
+    stale = bool(r.get("stale")) or force_stale
+    unconfirmed = bool(r.get("unconfirmed")) or r.get("answer") is None
+    if attribute == "state":
+        display = (
+            "MOVING" if r["answer"] == "moving" else
+            "PARKED" if r["answer"] == "parked" else
+            "unconfirmed" if unconfirmed else
+            (str(r["answer"]).upper() if r["answer"] else "unconfirmed")
+        )
+    elif attribute == "worker_present":
+        display = (
+            "YES" if r["answer"] == "yes" else
+            "NO" if r["answer"] == "no" else
+            "unconfirmed"
+        )
+    elif attribute == "blocked":
+        display = (
+            "BLOCKED" if r["answer"] and str(r["answer"]).startswith("yes") else
+            "CLEAR" if r["answer"] is not None else
+            "unconfirmed"
+        )
+    else:
+        display = "unconfirmed" if unconfirmed else str(r["answer"]).upper()
+    return {
+        "id": tid,
+        "label": label,
+        "sub": sub,
+        "entity": entity,
+        "attribute": attribute,
+        "value": r["answer"],
+        "display": display,
+        "tone": tile_tone(attribute, r["answer"], stale or unconfirmed),
+        "status": ("UNCONFIRMED" if unconfirmed else (r["status"] or "no_evidence").upper()),
+        "last_confirmed": last,
+        "last_confirmed_fmt": fmt_t(last) if last is not None else None,
+        "age_sec": age,
+        "stale": stale,
+        "clip_id": r.get("clip_id"),
+        "stale_banner": stale_banner,
+        "unconfirmed": unconfirmed,
+    }
+
+
 def board(as_of):
     store = STATE["store"]
     as_of = parse_t(as_of)
     cov = store.coverage_end(as_of)
     tiles = []
-    # Forklift first — hero tile
-    r = answer(store, ("forklift", "state", CAMERA), as_of, max_age=3600)
-    last = None
-    if r["claim_id"]:
-        ev = store.db.execute(
-            "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
-            (r["claim_id"],)).fetchone()
-        last = ev["m"] if ev else r["t_end"]
-    age = (as_of - last) if last is not None else None
-    stale = bool(r.get("stale")) or (cov is not None and (as_of - cov) > STALE_BANNER_GAP)
-    tiles.append({
-        "id": "forklift_state",
-        "label": "FORKLIFT",
-        "sub": camera_label(),
-        "entity": "forklift",
-        "attribute": "state",
-        "value": r["answer"],
-        "display": (
-            "MOVING" if r["answer"] == "moving" else
-            "PARKED" if r["answer"] == "parked" else
-            (str(r["answer"]).upper() if r["answer"] else "—")
-        ),
-        "tone": tile_tone("state", r["answer"], stale or r["answer"] is None),
-        "status": (r["status"] or "no_evidence").upper(),
-        "last_confirmed": last,
-        "last_confirmed_fmt": fmt_t(last) if last is not None else None,
-        "age_sec": age,
-        "stale": stale,
-        "clip_id": r["clip_id"],
-        "stale_banner": (
-            f"NO FOOTAGE SINCE {fmt_t(cov)} — may be stale"
-            if cov is not None and (as_of - cov) > STALE_BANNER_GAP else None
-        ),
-    })
-    # Camera-scoped worker_present (default). Zone tiles only when caption named an aisle.
-    r = answer(store, (CAMERA, "worker_present", CAMERA), as_of, max_age=3600)
-    last = None
-    if r["claim_id"]:
-        ev = store.db.execute(
-            "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
-            (r["claim_id"],)).fetchone()
-        last = ev["m"] if ev else r["t_end"]
-    age = (as_of - last) if last is not None else None
-    w_stale = bool(r.get("stale"))
-    tiles.append({
-        "id": f"worker_{CAMERA}",
-        "label": "WORKER PRESENT",
-        "sub": camera_label(),
-        "entity": CAMERA,
-        "attribute": "worker_present",
-        "value": r["answer"],
-        "display": (
-            "YES" if r["answer"] == "yes" else
-            "NO" if r["answer"] == "no" else
-            (str(r["answer"]).upper() if r["answer"] else "—")
-        ),
-        "tone": tile_tone("worker_present", r["answer"], w_stale or r["answer"] is None),
-        "status": (r["status"] or "no_evidence").upper(),
-        "last_confirmed": last,
-        "last_confirmed_fmt": fmt_t(last) if last is not None else None,
-        "age_sec": age,
-        "stale": w_stale,
-        "clip_id": r["clip_id"],
-        "stale_banner": None,
-    })
+    banner = (
+        f"NO FOOTAGE SINCE {fmt_t(cov)} — may be stale"
+        if cov is not None and (as_of - cov) > STALE_BANNER_GAP else None
+    )
+    gap_stale = bool(banner)
+    # Forklift first — hero tile (scoped to playing segment)
+    r = answer_for_playing_clip(store, ("forklift", "state", CAMERA), as_of, max_age=3600)
+    tiles.append(_tile_from_answer(
+        "forklift_state", "FORKLIFT", camera_label(), "forklift", "state", r, as_of,
+        stale_banner=banner, force_stale=gap_stale,
+    ))
+    # Camera-scoped worker_present for the playing clip only.
+    r = answer_for_playing_clip(
+        store, (CAMERA, "worker_present", CAMERA), as_of, max_age=3600)
+    tiles.append(_tile_from_answer(
+        f"worker_{CAMERA}", "WORKER PRESENT", camera_label(), CAMERA, "worker_present",
+        r, as_of,
+    ))
     for zone in ZONES:
-        r = answer(store, (zone, "worker_present", CAMERA), as_of, max_age=3600)
+        r = answer_for_playing_clip(
+            store, (zone, "worker_present", CAMERA), as_of, max_age=3600)
         if r["answer"] is not None:
-            last = None
-            if r["claim_id"]:
-                ev = store.db.execute(
-                    "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
-                    (r["claim_id"],)).fetchone()
-                last = ev["m"] if ev else r["t_end"]
-            age = (as_of - last) if last is not None else None
-            zone_stale = bool(r.get("stale"))
-            tiles.append({
-                "id": f"worker_{zone}",
-                "label": "WORKER PRESENT",
-                "sub": f"{camera_label()} · {zone.replace('_', ' ')}",
-                "entity": zone,
-                "attribute": "worker_present",
-                "value": r["answer"],
-                "display": (
-                    "YES" if r["answer"] == "yes" else
-                    "NO" if r["answer"] == "no" else
-                    (str(r["answer"]).upper() if r["answer"] else "—")
-                ),
-                "tone": tile_tone("worker_present", r["answer"], zone_stale),
-                "status": (r["status"] or "no_evidence").upper(),
-                "last_confirmed": last,
-                "last_confirmed_fmt": fmt_t(last) if last is not None else None,
-                "age_sec": age,
-                "stale": zone_stale,
-                "clip_id": r["clip_id"],
-                "stale_banner": None,
-            })
-        # blocked tiles only when we have a claim (re-ingest path)
-        rb = answer(store, (zone, "blocked", CAMERA), as_of, max_age=3600)
+            tiles.append(_tile_from_answer(
+                f"worker_{zone}", "WORKER PRESENT",
+                f"{camera_label()} · {zone.replace('_', ' ')}",
+                zone, "worker_present", r, as_of,
+            ))
+        rb = answer_for_playing_clip(store, (zone, "blocked", CAMERA), as_of, max_age=3600)
         if rb["answer"] is not None:
-            tiles.append({
-                "id": f"blocked_{zone}",
-                "label": "AISLE BLOCKED",
-                "sub": f"{camera_label()} · {zone.replace('_', ' ')}",
-                "entity": zone,
-                "attribute": "blocked",
-                "value": rb["answer"],
-                "display": ("BLOCKED" if str(rb["answer"]).startswith("yes") else "CLEAR"),
-                "tone": tile_tone("blocked", rb["answer"], bool(rb.get("stale"))),
-                "status": (rb["status"] or "no_evidence").upper(),
-                "last_confirmed": rb["t_end"],
-                "last_confirmed_fmt": fmt_t(rb["t_end"]) if rb["t_end"] is not None else None,
-                "age_sec": (as_of - rb["t_end"]) if rb["t_end"] is not None else None,
-                "stale": bool(rb.get("stale")),
-                "clip_id": rb["clip_id"],
-                "stale_banner": None,
-            })
+            tiles.append(_tile_from_answer(
+                f"blocked_{zone}", "AISLE BLOCKED",
+                f"{camera_label()} · {zone.replace('_', ' ')}",
+                zone, "blocked", rb, as_of,
+            ))
+    playing = clip_covering(as_of)
     return {
         "as_of": as_of,
         "as_of_fmt": fmt_t(as_of),
         "coverage_end": cov,
         "coverage_end_fmt": fmt_t(cov) if cov is not None else None,
         "camera_id": CAMERA,
+        "playing_clip_id": playing["clip_id"] if playing else None,
         "tiles": tiles,
     }
 
@@ -801,7 +846,8 @@ details th,details td{text-align:left;padding:.3rem;border-bottom:1px solid var(
 @keyframes toastIn{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
 footer{position:fixed;left:0;right:0;bottom:0;padding:.5rem 1rem;background:rgba(8,10,9,.92);border-top:1px solid var(--line);
   display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;font-size:.66rem;color:var(--muted);backdrop-filter:blur(6px)}
-footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;letter-spacing:.04em}
+footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;letter-spacing:.04em;text-decoration:none}
+footer a.chip:hover{border-color:var(--accent);color:var(--accent)}
 .meta{color:var(--muted);font-size:.75rem}
 .err{color:var(--red)}
 #changedHero{display:none;margin:.75rem 0;border:1px solid var(--line);background:var(--panel);padding:.75rem}
@@ -901,6 +947,7 @@ footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;let
   <span class="chip">NVIDIA Cosmos Reason</span>
   <span class="chip">CoreWeave GPUs</span>
   <span class="chip">Cursor</span>
+  <a class="chip" href="https://wandb.ai/harshrofff-na/receipts-vast-hack/runs/kvzklxkd" target="_blank" rel="noopener">W&amp;B (eval tracking)</a>
 </footer>
 <script>
 let meta={t_min:0,t_max:1,ready:false,segments:[]};
