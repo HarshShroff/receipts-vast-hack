@@ -14,6 +14,11 @@
     Results are read from <code id="resfile">eval/out/results_real.json</code>; nothing here calls a model.</p>
 </header>
 <main>
+  <section class="toolbar">
+    <label for="set">Question set</label>
+    <select id="set"></select>
+  </section>
+  <p class="draftbanner" id="draft" hidden>DRAFT LABELS: these questions have not been checked by a human yet. Do not quote these numbers.</p>
   <section>
     <h2>Summary <span class="meta" id="n"></span></h2>
     <div class="scroll"><table id="summary"></table></div>
@@ -23,6 +28,7 @@
 
   <section class="player">
     <div class="stage cmp"><video id="v" controls playsinline preload="metadata" muted></video></div>
+    <p class="meta hint">The clip that covers the question time; the player stops at the question time.</p>
     <div class="nowbar"><span class="mono" id="clock">–</span> <span class="meta" id="playing"></span></div>
   </section>
 

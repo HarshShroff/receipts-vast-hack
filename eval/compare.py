@@ -35,6 +35,46 @@ class Receipts:
         return receipts_answer(store, key, as_of)
 
 
+CLIPS_DIR = os.path.join(os.path.dirname(HERE), "clips")
+GAP_CATEGORIES = ("after-footage", "footage-gap")  # correct = flagged stale, whatever the value
+
+
+def clip_duration(clip_id):
+    """Seconds, from the viewer sidecar (clips/<id>.meta.json), else ffprobe."""
+    meta = os.path.join(CLIPS_DIR, clip_id + ".meta.json")
+    if os.path.exists(meta):
+        with open(meta) as f:
+            return float(json.load(f)["video"]["duration"])
+    import subprocess
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                          os.path.join(CLIPS_DIR, clip_id + ".mp4")], capture_output=True, text=True, check=True)
+    return float(out.stdout.strip())
+
+
+def scene_clips(clock):
+    """clip_clock {clip_id: 'HH:MM:SS'} -> [(clip_id, path, t_start, t_end)] in time order."""
+    out = []
+    for cid, start in clock.items():
+        t0 = parse_t(start)
+        out.append((cid, os.path.join(CLIPS_DIR, cid + ".mp4"), t0, t0 + clip_duration(cid)))
+    return sorted(out, key=lambda c: c[2])
+
+
+def build_store_from_labels(db_path, clock, labels):
+    """Every clip of the scene on its clock, and one claim per eye-checked label interval
+    (observed_at = interval start, as for the venue set)."""
+    if os.path.exists(db_path):
+        os.remove(db_path)
+    store = Store(db_path)
+    for cid, path, t0, t1 in scene_clips(clock):
+        store.add_clip(cid, t0, t1, "eye-checked labels", os.path.relpath(path, os.path.dirname(HERE)))
+    for lab in sorted(labels, key=lambda l: parse_t(l["interval"][0])):
+        entity, attribute, location = lab["key"]
+        ingest_claim(store, entity, attribute, lab["value"], lab["clip_id"], lab["interval"][0], lab["interval"][1],
+                     location, source="eye_check", observed_at=lab["interval"][0])
+    return store, "eye-checked label intervals in " + os.path.basename(db_path)
+
+
 def build_store_from_questions(db_path, questions):
     """One claim per labeled interval. observed_at is the interval start so a question during that interval can see it."""
     labeled = [q for q in questions if q.get("expected_answer") and q.get("expected_interval")]
@@ -70,13 +110,17 @@ def captions_from_questions(questions):
     return caps
 
 
-def answer_is_stale(store, result, as_of):
-    """True when the answer is a claim value that a newer observation had already replaced."""
+def answer_is_stale(store, result, as_of, key=None):
+    """True when the answer is a claim value that a newer observation of the same key had already replaced.
+    key = (entity, attribute, location); without it every observation counts (single-key question sets)."""
     if result.get("claim_id") is not None and store.is_superseded_at(result["claim_id"], as_of):
         return True
     if result.get("answer") is None:
         return False
     obs = store.observations(as_of)
+    if key is not None:
+        k = tuple(norm(x) for x in key)
+        obs = [o for o in obs if (norm(o["entity"]), norm(o["attribute"]), norm(o["location"])) == k]
     if not obs:
         return False
     latest = max(obs, key=lambda o: (o["observed_at"], o["claim_id"]))
@@ -114,7 +158,7 @@ def score_one(system, store, questions):
         r = system.answer(store, q["question"], q["question_key"], q["as_of"])
         exp_iv = [parse_t(t) for t in q["expected_interval"]] if q["expected_interval"] else None
         got = cited_interval(r)
-        after_footage = q.get("category") == "after-footage"
+        after_footage = q.get("category") in GAP_CATEGORIES
         if after_footage:
             # Nothing was observed at as_of: the right behaviour is a stale flag, with or without the last known value.
             ok = bool(r.get("stale"))
@@ -126,7 +170,7 @@ def score_one(system, store, questions):
             cited_in += inside
         if r.get("answer") is not None:
             answered += 1
-            if answer_is_stale(store, r, parse_t(q["as_of"])):
+            if answer_is_stale(store, r, parse_t(q["as_of"]), q.get("question_key")):
                 stale_used += 1
         if after_footage:
             after_n += 1
@@ -168,7 +212,7 @@ class _OneRepeat:
         return self.system.answer(store, question, key, as_of, repeat=self.k)
 
 
-def bar_chart(summaries, path):
+def bar_chart(summaries, path, title="Own venue clip, hand-labeled positions"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -180,7 +224,7 @@ def bar_chart(summaries, path):
     x = range(len(names))
     fig, ax = plt.subplots(figsize=(9, 5))
     w = 0.27
-    ax.bar([i - w for i in x], exact, w, label="correct (after-footage: flagged stale)")
+    ax.bar([i - w for i in x], exact, w, label="correct (after-footage / footage gap: flagged stale)")
     ax.bar(list(x), cited, w, label="cited time inside labeled interval")
     ax.bar([i + w for i in x], stale, w, label="answered from outdated state", color="#c0392b")
     n = next(iter(summaries.values()))["n"]
@@ -191,7 +235,7 @@ def bar_chart(summaries, path):
     ax.set_xticklabels(names, rotation=20, ha="right")
     ax.set_ylabel(f"count out of {n}")
     ax.set_ylim(0, max(n, 1))
-    ax.set_title(f"Own venue clip, hand-labeled positions (n={n}); claims = labels, so this tests time logic, not extraction", fontsize=9)
+    ax.set_title(f"{title} (n={n}); claims = labels, so this tests time logic, not extraction", fontsize=9)
     ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3, frameon=False)
     fig.tight_layout()
     fig.savefig(path)
@@ -233,13 +277,22 @@ def main(argv=None):
     p.add_argument("--repeats", type=int, default=3, help="Gemini calls per question (majority reported)")
     args = p.parse_args(argv)
 
-    questions = json.load(open(args.questions))["questions"]
-    store, source = build_store_from_questions(args.db, questions)
+    with open(args.questions) as f:
+        qdata = json.load(f)
+    questions = qdata["questions"]
+    clock = qdata.get("clip_clock") or {}
+    labels = qdata.get("labels")
+    set_name = os.path.splitext(os.path.basename(args.questions))[0].replace("questions_", "")
+    if labels:
+        store, source = build_store_from_labels(args.db, clock, labels)
+        claims_note = "claims are the eye-checked label intervals, so Receipts is scored on those labels"
+    else:
+        store, source = build_store_from_questions(args.db, questions)
+        claims_note = "claims are the eye-checked position intervals, so Receipts is scored on those labels"
     systems = [Receipts()] + list(ALL)
-    notes = [
-        f"store: {source}",
-        "claims are the eye-checked position intervals, so Receipts is scored on those labels",
-    ]
+    notes = [f"store: {source}", claims_note]
+    if qdata.get("label_status") == "draft":
+        notes.append("LABELS ARE A DRAFT: not yet checked by a human; do not quote these numbers")
 
     if args.live:
         systems.append(VssAgentBaseline(VssAgentClient()))
@@ -262,17 +315,25 @@ def main(argv=None):
 
     gemini = None
     if args.gemini:
-        from baselines_gemini import GeminiFullContext, answer_options
+        from baselines_gemini import GeminiFullContext, GeminiScene, answer_options, options_by_key
         from gemini_client import GeminiVideoQA
-        clip = os.path.join(os.path.dirname(HERE), "clips", "person_moving.mp4")
         qa = GeminiVideoQA(model=args.gemini_model, offline=args.gemini_offline)
         if args.gemini_offline and qa._model is None:
             raise SystemExit("--gemini-offline needs --gemini-model (no API call to resolve it)")
-        gemini = GeminiFullContext(clip, CLIP_START, answer_options(questions), qa=qa, repeats=args.repeats)
+        clips = scene_clips(clock) if clock else []
+        if len(clips) <= 1:  # single clip: the original venue setup, prompt unchanged so its cache stays valid
+            clip = clips[0][1] if clips else os.path.join(CLIPS_DIR, "person_moving.mp4")
+            start = clips[0][2] if clips else CLIP_START
+            gemini = GeminiFullContext(clip, start, answer_options(questions), qa=qa, repeats=args.repeats)
+            what, prompt_name = os.path.relpath(clip, os.path.dirname(HERE)) + " cut at as_of", "PROMPT_FULL"
+        else:
+            gemini = GeminiScene(clips, options_by_key(questions), qa=qa, repeats=args.repeats)
+            what, prompt_name = (f"every clip of the scene that started before as_of ({len(clips)} clips), "
+                                 "the last cut at as_of"), "PROMPT_SCENE"
         systems.append(gemini)
-        notes.append(f"Gemini Flash ({qa.model_id}) watches clips/person_moving.mp4 cut at as_of (720p, 2 fps sampling, "
-                     f"temperature 0), answers from the label vocabulary or 'unknown', majority of {args.repeats} runs; "
-                     "prompt in baselines_gemini.PROMPT_FULL")
+        notes.append(f"Gemini Flash ({qa.model_id}) watches {what} (720p, 2 fps sampling, temperature 0), answers from "
+                     f"the label vocabulary or 'unknown', majority of {args.repeats} run(s); "
+                     f"prompt in baselines_gemini.{prompt_name}")
 
     summaries = {}
     per_q = {}
@@ -300,9 +361,10 @@ def main(argv=None):
             by_id = {q["id"]: q for q in questions}
             missing = []
             for row in rows:
-                r = system.answer(store, by_id[row["id"]]["question"], None, by_id[row["id"]]["as_of"])
+                q = by_id[row["id"]]
+                r = system.answer(store, q["question"], q["question_key"], q["as_of"])
                 row.update(agreement=r["agreement"], repeats=r["repeats"], runs_missing=r["runs_missing"],
-                           t_start=r["t_start"], t_end=r["t_end"])
+                           clip_id=r["clip_id"], t_start=r["t_start"], t_end=r["t_end"])
                 if r["runs_missing"]:
                     missing.append(f"{row['id']} ({r['runs_missing']} missing)")
             if missing:
@@ -313,13 +375,20 @@ def main(argv=None):
         per_q[name] = rows
 
     os.makedirs(args.out, exist_ok=True)
-    chart = os.path.join(args.out, "results_real.png")
-    bar_chart(summaries, chart)
-    payload = {"questions": os.path.basename(args.questions), "notes": notes, "summaries": summaries, "per_question": per_q}
-    out_json = os.path.join(args.out, "results_real.json")
+    chart = os.path.join(args.out, f"results_{set_name}.png")
+    titles = {"real": "Own venue clip, hand-labeled positions"}
+    draft = qdata.get("label_status") == "draft"
+    bar_chart(summaries, chart, (titles.get(set_name, f"{set_name} clips, eye-checked labels")
+                                 + (" [DRAFT LABELS]" if draft else "")))
+    payload = {"questions": os.path.basename(args.questions), "label_status": qdata.get("label_status", "checked"),
+               "notes": notes, "summaries": summaries, "per_question": per_q}
+    out_json = os.path.join(args.out, f"results_{set_name}.json")
     with open(out_json, "w") as f:
         json.dump(payload, f, indent=2)
     print(json.dumps({"notes": notes, "summaries": summaries, "chart": chart}, indent=2))
+    if draft:
+        print("wandb: not logged (draft labels)")
+        return 0
     try:
         logged = maybe_wandb(
             [{"system": n, **s} for n, s in summaries.items()],

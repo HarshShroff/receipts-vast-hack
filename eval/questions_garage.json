@@ -1,0 +1,40 @@
+{
+  "label_status": "draft",
+  "clip_clock": {
+    "garage_01_cluttered": "18:00:00",
+    "garage_02_cleared": "18:01:00"
+  },
+  "_label": "DRAFT, needs a human check in the viewer. Garage time-lapse (CC BY YouTube, local eval only, never shown in the VAST app). There is no camera clock, so the clock is assigned: garage_01 starts 18:00:00 and garage_02 starts 18:01:00, matching their 0 s and 60 s offsets in the source video (the source is a time-lapse, so real elapsed time is longer). Labels drafted by Claude from 1 fps frame sheets (4 fps for garage_02 7-10 s), not from Cosmos, YOLO, Gemini or the viewer sidecars. garage_01: floor cluttered (bins, boxes, hose, red bucket), door open to daylight, the whole clip. garage_02: floor cleared, no red bucket, evening; the door is open until 18:01:09.25 and closed from 18:01:09.5 to the end (18:01:10). Footage-gap and after-footage questions are correct only when flagged stale.",
+  "labels": [
+    {"key": ["floor", "state", "garage"], "value": "cluttered", "clip_id": "garage_01_cluttered", "interval": ["18:00:00", "18:00:12"]},
+    {"key": ["floor", "state", "garage"], "value": "clear", "clip_id": "garage_02_cleared", "interval": ["18:01:00", "18:01:10"]},
+    {"key": ["door", "state", "garage"], "value": "open", "clip_id": "garage_01_cluttered", "interval": ["18:00:00", "18:00:12"]},
+    {"key": ["door", "state", "garage"], "value": "open", "clip_id": "garage_02_cleared", "interval": ["18:01:00", "18:01:09"]},
+    {"key": ["door", "state", "garage"], "value": "closed", "clip_id": "garage_02_cleared", "interval": ["18:01:09.5", "18:01:10"]},
+    {"key": ["red_bucket", "present", "garage"], "value": "yes", "clip_id": "garage_01_cluttered", "interval": ["18:00:00", "18:00:12"]},
+    {"key": ["red_bucket", "present", "garage"], "value": "no", "clip_id": "garage_02_cleared", "interval": ["18:01:00", "18:01:10"]}
+  ],
+  "questions": [
+    {"id": "g01", "category": "state-now", "question": "Is the garage floor cluttered or clear?",
+     "question_key": ["floor", "state", "garage"], "as_of": "18:00:06", "expected_answer": "cluttered",
+     "expected_clip_id": "garage_01_cluttered", "expected_interval": ["18:00:00", "18:00:12"], "expected_stale": false},
+    {"id": "g02", "category": "footage-gap", "question": "Is the garage floor cluttered or clear?",
+     "question_key": ["floor", "state", "garage"], "as_of": "18:00:40", "expected_answer": null,
+     "expected_clip_id": null, "expected_interval": null, "expected_stale": true},
+    {"id": "g03", "category": "changed-since", "question": "Is the garage floor cluttered or clear?",
+     "question_key": ["floor", "state", "garage"], "as_of": "18:01:05", "expected_answer": "clear",
+     "expected_clip_id": "garage_02_cleared", "expected_interval": ["18:01:00", "18:01:10"], "expected_stale": false},
+    {"id": "g04", "category": "state-now", "question": "Is the garage door open or closed?",
+     "question_key": ["door", "state", "garage"], "as_of": "18:01:05", "expected_answer": "open",
+     "expected_clip_id": "garage_02_cleared", "expected_interval": ["18:01:00", "18:01:09"], "expected_stale": false},
+    {"id": "g05", "category": "changed-since", "question": "Is the garage door open or closed?",
+     "question_key": ["door", "state", "garage"], "as_of": "18:01:09.9", "expected_answer": "closed",
+     "expected_clip_id": "garage_02_cleared", "expected_interval": ["18:01:09.5", "18:01:10"], "expected_stale": false},
+    {"id": "g06", "category": "after-footage", "question": "Is the garage door open or closed?",
+     "question_key": ["door", "state", "garage"], "as_of": "18:01:30", "expected_answer": null,
+     "expected_clip_id": null, "expected_interval": null, "expected_stale": true},
+    {"id": "g07", "category": "changed-since", "question": "Is there a red bucket on the garage floor?",
+     "question_key": ["red_bucket", "present", "garage"], "as_of": "18:01:05", "expected_answer": "no",
+     "expected_clip_id": "garage_02_cleared", "expected_interval": ["18:01:00", "18:01:10"], "expected_stale": false}
+  ]
+}

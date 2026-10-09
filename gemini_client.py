@@ -158,15 +158,26 @@ class GeminiVideoQA(VideoQA):
 
     def ask(self, video_path, video_id, prompt, schema, repeat=0):
         digest, material = self.cache_key(video_id, prompt, schema, repeat)
+        return self._cached(digest, material, lambda: [video_part(video_path, self.fps), {"text": prompt}], schema)
+
+    def ask_parts(self, parts, prompt, schema, repeat=0):
+        """Several labeled videos in one request. parts: [{"text": str} | {"video": path, "id": video_id}],
+        sent in order, followed by the prompt. Cache key uses video ids, never bytes."""
+        desc = [p if "text" in p else {"video": p["id"]} for p in parts]
+        digest, material = self.cache_key(desc, prompt, schema, repeat)
+        build = lambda: [video_part(p["video"], self.fps) if "video" in p else {"text": p["text"]} for p in parts] \
+            + [{"text": prompt}]  # noqa: E731
+        return self._cached(digest, material, build, schema)
+
+    def _cached(self, digest, material, build_parts, schema):
         path = os.path.join(self.cache_dir, digest + ".json")
         if os.path.exists(path):
             with open(path) as f:
                 entry = json.load(f)
             return {"data": json.loads(entry["text"]), "model_version": entry["model_version"], "cached": True}
         if self.offline:
-            raise CacheMiss(f"cache miss in offline mode ({digest[:12]}, repeat {repeat})")
-        parts = [video_part(video_path, self.fps), {"text": prompt}]
-        text, version, usage = generate(self.model_id, parts, schema, self.temperature)
+            raise CacheMiss(f"cache miss in offline mode ({digest[:12]}, repeat {material['repeat']})")
+        text, version, usage = generate(self.model_id, build_parts(), schema, self.temperature)
         self.calls += 1
         data = json.loads(text)
         os.makedirs(self.cache_dir, exist_ok=True)

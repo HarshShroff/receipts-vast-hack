@@ -1,10 +1,11 @@
 {
   "questions": "questions_real.json",
+  "label_status": "checked",
   "notes": [
-    "store: eye-checked intervals in rv_eval.db",
+    "store: eye-checked intervals in ev_real.db",
     "claims are the eye-checked position intervals, so Receipts is scored on those labels",
     "VSS agent-qa and LLM-over-captions were not called (--live not set)",
-    "Gemini Flash (gemini-3.8-flash) watches clips/person_moving.mp4 cut at as_of (720p, 2 fps sampling, temperature 0), answers from the label vocabulary or 'unknown', majority of 3 runs; prompt in baselines_gemini.PROMPT_FULL",
+    "Gemini Flash (gemini-3.8-flash) watches clips/person_moving.mp4 cut at as_of (720p, 2 fps sampling, temperature 0), answers from the label vocabulary or 'unknown', majority of 3 run(s); prompt in baselines_gemini.PROMPT_FULL",
     "Gemini runs not completed (free-tier quota), majority taken over the runs that exist: r06 (1 missing)"
   ],
   "summaries": {
@@ -595,6 +596,7 @@
           {
             "answer": "left of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43380.0,
             "t_end": 43380.5,
             "reason": "The man wearing the gray hoodie and jeans is standing directly to the left of the center pillar."
@@ -602,6 +604,7 @@
           {
             "answer": "left of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43380.0,
             "t_end": 43380.5,
             "reason": "The man wearing the gray hoodie is standing directly to the left of the prominent center pillar throughout the video clip."
@@ -609,12 +612,14 @@
           {
             "answer": "left of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43380.0,
             "t_end": 43380.5,
             "reason": "The man in the gray hoodie is standing directly to the left of the prominent white pillar in the center of the frame."
           }
         ],
         "runs_missing": 0,
+        "clip_id": "person_moving",
         "t_start": 43380.0,
         "t_end": 43380.5
       },
@@ -638,6 +643,7 @@
           {
             "answer": "right of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43382.5,
             "t_end": 43383.0,
             "reason": "At the end of the video, the man in the gray hoodie emerges and stands to the right of the center pillar."
@@ -645,6 +651,7 @@
           {
             "answer": "right of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43382.0,
             "t_end": 43382.5,
             "reason": "The man in the gray hoodie walks behind the center pillar and emerges on its right side by the end of the footage."
@@ -652,12 +659,14 @@
           {
             "answer": "right of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43382.0,
             "t_end": 43383.0,
             "reason": "The man in the gray hoodie walks behind the center pillar and emerges standing to its right."
           }
         ],
         "runs_missing": 0,
+        "clip_id": "person_moving",
         "t_start": 43382.5,
         "t_end": 43383.0
       },
@@ -681,6 +690,7 @@
           {
             "answer": "left of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43384.5,
             "t_end": 43385.5,
             "reason": "At the end of the footage, the man in the gray hoodie is standing to the left of the large center pillar."
@@ -688,6 +698,7 @@
           {
             "answer": "left of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43384.5,
             "t_end": 43385.5,
             "reason": "At the end of the footage, the man in the gray hoodie has moved back and is standing to the left of the center pillar."
@@ -695,12 +706,14 @@
           {
             "answer": "left of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43384.5,
             "t_end": 43385.5,
             "reason": "At the end of the video, the man in the gray hoodie is standing to the left of the center pillar."
           }
         ],
         "runs_missing": 0,
+        "clip_id": "person_moving",
         "t_start": 43384.5,
         "t_end": 43385.5
       },
@@ -724,6 +737,7 @@
           {
             "answer": "behind the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43385.5,
             "t_end": 43386.5,
             "reason": "At the end of the clip, the man in the gray hoodie steps behind the large center pillar and remains obscured."
@@ -731,6 +745,7 @@
           {
             "answer": "behind the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43385.5,
             "t_end": 43386.0,
             "reason": "The man in the gray hoodie steps out of view behind the large white center pillar around 00:05.5 and remains behind it at the end of the video."
@@ -738,12 +753,14 @@
           {
             "answer": "behind the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43385.5,
             "t_end": 43386.0,
             "reason": "The man in the gray hoodie steps out of view behind the large center pillar by 00:06.000."
           }
         ],
         "runs_missing": 0,
+        "clip_id": "person_moving",
         "t_start": 43385.5,
         "t_end": 43386.5
       },
@@ -767,6 +784,7 @@
           {
             "answer": "right of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43387.0,
             "t_end": 43388.0,
             "reason": "At the end of the video, the man in the gray hoodie is standing directly to the right of the center pillar."
@@ -774,6 +792,7 @@
           {
             "answer": "right of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43387.0,
             "t_end": 43388.0,
             "reason": "At the end of the video, the man in the gray hoodie is standing to the right of the large center pillar."
@@ -781,12 +800,14 @@
           {
             "answer": "right of the center pillar",
             "stale": false,
+            "clip_id": "person_moving",
             "t_start": 43387.0,
             "t_end": 43387.5,
             "reason": "At the end of the video, the man in the gray hoodie is standing to the right of the center pillar."
           }
         ],
         "runs_missing": 0,
+        "clip_id": "person_moving",
         "t_start": 43387.0,
         "t_end": 43388.0
       },
@@ -810,6 +831,7 @@
           {
             "answer": "right of the center pillar",
             "stale": true,
+            "clip_id": "person_moving",
             "t_start": 43387.0,
             "t_end": 43388.0,
             "reason": "The man in the gray hoodie is seen standing to the right of the center pillar towards the end of the footage."
@@ -817,12 +839,14 @@
           {
             "answer": "right of the center pillar",
             "stale": true,
+            "clip_id": "person_moving",
             "t_start": 43387.0,
             "t_end": 43388.633,
             "reason": "The man in the gray hoodie is standing to the right of the center pillar at the end of the clip, prior to the question time."
           }
         ],
         "runs_missing": 1,
+        "clip_id": "person_moving",
         "t_start": 43387.0,
         "t_end": 43388.0
       }

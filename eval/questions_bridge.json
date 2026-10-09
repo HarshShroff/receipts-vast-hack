@@ -1,0 +1,46 @@
+{
+  "label_status": "draft",
+  "clip_clock": {
+    "bridge_01_road_clear": "09:06:05",
+    "bridge_02_truck_stuck": "09:06:21",
+    "bridge_03_road_clear_again": "09:07:21"
+  },
+  "_label": "DRAFT, needs a human check in the viewer. 11foot8 bridge cam (CC BY YouTube, local eval only, never shown in the VAST app). Clip clock is the camera's burned-in timestamp (2018-02-20): bridge_01 09:06:05-09:06:14, bridge_02 09:06:21-09:06:56, bridge_03 09:07:21-09:07:31, so the footage has real gaps of 7 s and 25 s. Labels drafted by Claude from 1 fps frame sheets (2 fps for 09:06:31-09:06:40), not from Cosmos, YOLO, Gemini or the viewer sidecars. The box truck is wedged under the bridge for the first ~4 s of bridge_02, backs out gradually between ~09:06:26 and ~09:06:41 (not labeled: in transit), then sits in the intersection in front of the bridge until the clip ends. In bridge_03 it is parked at the far left edge of the frame (clearly visible 09:07:21-09:07:24). Footage-gap and after-footage questions are correct only when flagged stale.",
+  "labels": [
+    {"key": ["underpass", "state", "bridge"], "value": "clear", "clip_id": "bridge_01_road_clear", "interval": ["09:06:05", "09:06:14"]},
+    {"key": ["underpass", "state", "bridge"], "value": "blocked", "clip_id": "bridge_02_truck_stuck", "interval": ["09:06:21", "09:06:25"]},
+    {"key": ["underpass", "state", "bridge"], "value": "clear", "clip_id": "bridge_03_road_clear_again", "interval": ["09:07:21", "09:07:31"]},
+    {"key": ["truck", "position", "bridge"], "value": "under the bridge", "clip_id": "bridge_02_truck_stuck", "interval": ["09:06:21", "09:06:25"]},
+    {"key": ["truck", "position", "bridge"], "value": "in the intersection in front of the bridge", "clip_id": "bridge_02_truck_stuck", "interval": ["09:06:41", "09:06:56"]},
+    {"key": ["truck", "position", "bridge"], "value": "parked at the left edge of the frame", "clip_id": "bridge_03_road_clear_again", "interval": ["09:07:21", "09:07:24"]}
+  ],
+  "questions": [
+    {"id": "b01", "category": "state-now", "question": "Is the underpass under the bridge blocked or clear?",
+     "question_key": ["underpass", "state", "bridge"], "as_of": "09:06:10", "expected_answer": "clear",
+     "expected_clip_id": "bridge_01_road_clear", "expected_interval": ["09:06:05", "09:06:14"], "expected_stale": false},
+    {"id": "b02", "category": "footage-gap", "question": "Is the underpass under the bridge blocked or clear?",
+     "question_key": ["underpass", "state", "bridge"], "as_of": "09:06:18", "expected_answer": null,
+     "expected_clip_id": null, "expected_interval": null, "expected_stale": true},
+    {"id": "b03", "category": "changed-since", "question": "Is the underpass under the bridge blocked or clear?",
+     "question_key": ["underpass", "state", "bridge"], "as_of": "09:06:24", "expected_answer": "blocked",
+     "expected_clip_id": "bridge_02_truck_stuck", "expected_interval": ["09:06:21", "09:06:25"], "expected_stale": false},
+    {"id": "b04", "category": "changed-since", "question": "Is the underpass under the bridge blocked or clear?",
+     "question_key": ["underpass", "state", "bridge"], "as_of": "09:07:28", "expected_answer": "clear",
+     "expected_clip_id": "bridge_03_road_clear_again", "expected_interval": ["09:07:21", "09:07:31"], "expected_stale": false},
+    {"id": "b05", "category": "after-footage", "question": "Is the underpass under the bridge blocked or clear?",
+     "question_key": ["underpass", "state", "bridge"], "as_of": "09:08:00", "expected_answer": null,
+     "expected_clip_id": null, "expected_interval": null, "expected_stale": true},
+    {"id": "b06", "category": "never-observed", "question": "Where is the box truck?",
+     "question_key": ["truck", "position", "bridge"], "as_of": "09:06:12", "expected_answer": null,
+     "expected_clip_id": null, "expected_interval": null, "expected_stale": false},
+    {"id": "b07", "category": "state-now", "question": "Where is the box truck?",
+     "question_key": ["truck", "position", "bridge"], "as_of": "09:06:24", "expected_answer": "under the bridge",
+     "expected_clip_id": "bridge_02_truck_stuck", "expected_interval": ["09:06:21", "09:06:25"], "expected_stale": false},
+    {"id": "b08", "category": "changed-since", "question": "Where is the box truck?",
+     "question_key": ["truck", "position", "bridge"], "as_of": "09:06:50", "expected_answer": "in the intersection in front of the bridge",
+     "expected_clip_id": "bridge_02_truck_stuck", "expected_interval": ["09:06:41", "09:06:56"], "expected_stale": false},
+    {"id": "b09", "category": "changed-since", "question": "Where is the box truck?",
+     "question_key": ["truck", "position", "bridge"], "as_of": "09:07:23", "expected_answer": "parked at the left edge of the frame",
+     "expected_clip_id": "bridge_03_road_clear_again", "expected_interval": ["09:07:21", "09:07:24"], "expected_stale": false}
+  ]
+}

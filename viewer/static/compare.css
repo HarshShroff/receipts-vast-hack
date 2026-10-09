@@ -25,10 +25,10 @@
 .tl .trk .lbl { position: absolute; left: 0; top: -1px; font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
 .tl .iv { position: absolute; top: 2px; height: 10px; border-radius: 2px; min-width: 3px; }
 .tl .truth { position: absolute; top: 0; bottom: 0; background: rgba(111,191,138,0.16); border-left: 1px solid var(--ok); border-right: 1px solid var(--ok); }
-.tl .gap { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, rgba(217,123,108,0.10) 0 6px, transparent 6px 12px); }
+.tl .footage { position: relative; height: 8px; margin-bottom: 2px; background: repeating-linear-gradient(45deg, rgba(217,123,108,0.18) 0 4px, transparent 4px 8px); }
+.tl .footage .rec { position: absolute; top: 0; bottom: 0; background: #3a4a40; }
 .tl .mark { position: absolute; top: 0; bottom: 0; width: 2px; }
 .tl .mark.asof { background: #fff; }
-.tl .mark.end { background: var(--bad); }
 .tl .mark.now { background: var(--accent); width: 1px; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.5rem; }
@@ -41,3 +41,4 @@
 .mark-ok { color: var(--ok); font-weight: 700; }
 .mark-bad { color: var(--bad); font-weight: 700; }
 button.play { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+.draftbanner { background: #3a2a1a; color: var(--accent); padding: 0.5rem 0.75rem; font-weight: 600; border-left: 4px solid var(--accent); }

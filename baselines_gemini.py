@@ -142,21 +142,133 @@ class GeminiFullContext:
                 "claim_id": None, "time_restricted": True, "model_id": model_version,
                 "note": data.get("reason"), "covered_until": self.clip_start + covered, "as_of": as_of}
 
-    def answer(self, store, question, key, as_of, repeat=None):
-        """Majority over repeats (or one repeat if `repeat` is given), in eval/compare.py's result shape."""
+    def results(self, question, key, as_of):
+        """One compare.py-shaped result per repeat, None where the repeat has no answer."""
         runs, covered = self.ask_all(question, as_of)
         as_of = parse_t(as_of)
-        results = [None if run is None else self.to_result(run[0], as_of, covered, run[1]) for run in runs]
-        if repeat is not None:
-            if results[repeat] is None:
-                raise MissingRepeat(f"repeat {repeat} of {question!r} at {fmt_clock(as_of)} has no answer")
-            return results[repeat]
-        results = [r for r in results if r is not None]
-        if not results:
-            raise MissingRepeat(f"no answers for {question!r} at {fmt_clock(as_of)}")
-        votes = Counter((r["answer"], r["stale"]) for r in results)
-        (ans, stale), n = votes.most_common(1)[0]
-        best = next(r for r in results if (r["answer"], r["stale"]) == (ans, stale))
-        return dict(best, agreement=f"{n}/{len(results)}", runs_missing=self.repeats - len(results),
-                    repeats=[{"answer": r["answer"], "stale": r["stale"], "t_start": r["t_start"],
-                              "t_end": r["t_end"], "reason": r["note"]} for r in results])
+        return [None if run is None else self.to_result(run[0], as_of, covered, run[1]) for run in runs]
+
+    def answer(self, store, question, key, as_of, repeat=None):
+        """Majority over repeats (or one repeat if `repeat` is given), in eval/compare.py's result shape."""
+        return majority(self.results(question, key, as_of), self.repeats, question, parse_t(as_of), repeat)
+
+
+def majority(results, repeats, question, as_of, repeat=None):
+    """Majority (answer, stale) over the repeats that exist; one repeat if `repeat` is given."""
+    if repeat is not None:
+        if results[repeat] is None:
+            raise MissingRepeat(f"repeat {repeat} of {question!r} at {fmt_clock(as_of)} has no answer")
+        return results[repeat]
+    results = [r for r in results if r is not None]
+    if not results:
+        raise MissingRepeat(f"no answers for {question!r} at {fmt_clock(as_of)}")
+    votes = Counter((r["answer"], r["stale"]) for r in results)
+    (ans, stale), n = votes.most_common(1)[0]
+    best = next(r for r in results if (r["answer"], r["stale"]) == (ans, stale))
+    return dict(best, agreement=f"{n}/{len(results)}", runs_missing=repeats - len(results),
+                repeats=[{"answer": r["answer"], "stale": r["stale"], "clip_id": r["clip_id"], "t_start": r["t_start"],
+                          "t_end": r["t_end"], "reason": r["note"]} for r in results])
+
+
+PROMPT_SCENE = """You are answering a question about footage from one fixed security camera.
+
+You are given {n} video clip(s) in time order. Each is labeled with its clip id and the camera-clock range it covers.
+Time between clips was not recorded.
+The question is asked at {as_of}.
+
+Question: {question}
+
+Choose exactly one answer from this list: {options}. Answer "unknown" if the footage does not show it.
+Cite the clip your answer is based on as clip_id, and the moment as t_start and t_end in seconds from the start of that clip.
+Staleness rule: set stale to true if your answer relies on footage that ends before the question time,
+or on evidence more than {max_age} seconds older than the question time. Otherwise set stale to false.
+Give a one-sentence reason."""
+
+
+def scene_schema(options, clip_ids):
+    s = response_schema(options)
+    s["properties"]["clip_id"] = {"type": "STRING", "enum": list(clip_ids), "nullable": True}
+    s["required"] = ["answer", "clip_id", "t_start", "t_end", "stale", "reason"]
+    s["propertyOrdering"] = ["answer", "clip_id", "t_start", "t_end", "stale", "reason"]
+    return s
+
+
+def options_by_key(questions):
+    """{(entity, attribute, location): [labelled answers..., "unknown"]}, from every labelled value of that key."""
+    out = {}
+    for q in questions:
+        out.setdefault(tuple(q["question_key"]), [])
+    for q in questions:
+        a = q.get("expected_answer")
+        opts = out[tuple(q["question_key"])]
+        if a and a not in opts:
+            opts.append(a)
+    return {k: v + [UNKNOWN] for k, v in out.items()}
+
+
+class GeminiScene:
+    """(i) for a multi-clip scene: every clip that started before as_of, in order and labeled with its clock
+    range, the last one cut at as_of. One request per question and repeat."""
+
+    def __init__(self, clips, options, qa=None, repeats=1, max_age=MAX_AGE, cut=cut_until):
+        """clips: [(clip_id, path, t_start, t_end)]; options: {question_key tuple: [answers]}."""
+        self.clips = sorted(clips, key=lambda c: c[2])
+        self.options = options
+        self.qa = qa or GeminiVideoQA()
+        self.repeats, self.max_age, self.cut = repeats, max_age, cut
+        self._hash = {}
+
+    @property
+    def name(self):
+        return f"Gemini Flash, full video to as_of ({self.qa.model_id})"
+
+    def visible(self, as_of):
+        """[(clip_id, path, t_start, covered_seconds)] for clips that started before as_of."""
+        return [(cid, path, t0, min(as_of, t1) - t0) for cid, path, t0, t1 in self.clips if t0 < as_of]
+
+    def request(self, question, key, as_of):
+        vis = self.visible(as_of)
+        parts = []
+        for cid, path, t0, covered in vis:
+            cut_path, covered = self.cut(path, covered)
+            if path not in self._hash:
+                self._hash[path] = file_sha256(path)
+            parts.append({"text": f"Clip {cid}: camera clock {fmt_clock(t0)} to {fmt_clock(t0 + covered)}"})
+            parts.append({"video": cut_path, "id": f"{self._hash[path]}:{covered:.3f}:{ENCODE}"})
+        options = self.options[tuple(key)]
+        prompt = PROMPT_SCENE.format(n=len(vis), as_of=fmt_clock(as_of), question=question,
+                                     options=", ".join(f'"{o}"' for o in options), max_age=self.max_age)
+        return vis, parts, prompt, scene_schema(options, [v[0] for v in vis])
+
+    def to_result(self, data, vis, as_of, model_version):
+        starts = {cid: t0 for cid, _, t0, _ in vis}
+        ans = data.get("answer")
+        cid, t0, t1 = data.get("clip_id"), data.get("t_start"), data.get("t_end")
+        cited = None
+        if cid in starts and t0 is not None and t1 is not None:
+            t0, t1 = sorted((max(0.0, float(t0)), max(0.0, float(t1))))
+            cited = (starts[cid] + t0, starts[cid] + t1)
+        return {"answer": None if ans in (None, UNKNOWN) else ans, "stale": bool(data.get("stale")),
+                "t_start": cited[0] if cited else None, "t_end": cited[1] if cited else None,
+                "cited_time_s": cited[1] if cited else None, "clip_id": cid if cited else None,
+                "claim_id": None, "time_restricted": True, "model_id": model_version, "note": data.get("reason"),
+                "covered_until": max((t + c for _, _, t, c in vis), default=None), "as_of": as_of}
+
+    def results(self, question, key, as_of):
+        as_of = parse_t(as_of)
+        vis, parts, prompt, schema = self.request(question, key, as_of)
+        if not vis:  # nothing recorded yet: no call, an honest "unknown"
+            return [self.to_result({"answer": UNKNOWN, "stale": False, "reason": "no footage before the question time"},
+                                   vis, as_of, None)] * self.repeats
+        out = []
+        for k in range(self.repeats):
+            try:
+                r = self.qa.ask_parts(parts, prompt, schema, repeat=k)
+            except (CacheMiss, QuotaExhausted):
+                out.append(None)
+                continue
+            out.append(self.to_result(r["data"], vis, as_of, r["model_version"]))
+        return out
+
+    def answer(self, store, question, key, as_of, repeat=None):
+        return majority(self.results(question, key, as_of), self.repeats, question, parse_t(as_of), repeat)

@@ -128,22 +128,64 @@ def _allow_local_clip(cid):
     return bool(c) and not c.endswith("_noaudio")
 
 
-def api_compare():
-    """Model comparison: labeled questions + the committed eval results (eval/compare.py output).
-    Read-only; never calls a model."""
-    qs = api_questions()
+EVAL_DIR = os.path.join(ROOT, "eval")
+
+
+def compare_sets():
+    """Question sets with a clip clock: eval/questions_<set>.json ('real' = the venue set)."""
+    out = []
+    for f in sorted(os.listdir(EVAL_DIR)):
+        if not (f.startswith("questions_") and f.endswith(".json")):
+            continue
+        name = f[len("questions_"):-len(".json")]
+        try:
+            with open(os.path.join(EVAL_DIR, f), encoding="utf-8") as fh:
+                d = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if not d.get("clip_clock"):
+            continue
+        res = os.path.join(EVAL_DIR, "out", f"results_{name}.json")
+        out.append({"set": name, "questions": len(d.get("questions") or []),
+                    "label_status": d.get("label_status", "checked"),
+                    "clips": list(d["clip_clock"]), "has_results": os.path.isfile(res)})
+    out.sort(key=lambda s: (s["set"] != "real", s["set"]))
+    return out
+
+
+def api_compare(set_name="real"):
+    """Model comparison for one question set: questions, the scene's clips on their clock, and the
+    committed eval results (eval/compare.py output). Read-only; never calls a model."""
+    if not set_name.replace("_", "").isalnum():
+        return None
+    qpath = os.path.join(EVAL_DIR, f"questions_{set_name}.json")
+    rpath = RESULTS_PATH if set_name == "real" else os.path.join(EVAL_DIR, "out", f"results_{set_name}.json")
+    if not os.path.isfile(qpath):
+        return None
+    with open(qpath, encoding="utf-8") as f:
+        qd = json.load(f)
     res = {}
-    if os.path.isfile(RESULTS_PATH):
-        with open(RESULTS_PATH, encoding="utf-8") as f:
+    if os.path.isfile(rpath):
+        with open(rpath, encoding="utf-8") as f:
             res = json.load(f)
-    clock = qs.get("clip_clock") or {}
-    clip_id = next(iter(clock), "person_moving")
-    path = clip_paths().get(clip_id)
-    return {"questions": qs["questions"], "label": qs.get("label", ""),
-            "clip_id": clip_id, "clip_url": ("clips/" + os.path.basename(path)) if path else None,
-            "clip_start": parse_t(clock[clip_id]) if clip_id in clock else 0.0,
+    paths = clip_paths()
+    clips = []
+    for cid, start in (qd.get("clip_clock") or {}).items():
+        path = paths.get(cid)
+        meta = get_meta(path) if path else None
+        dur = ((meta or {}).get("video") or {}).get("duration")
+        t0 = parse_t(start)
+        clips.append({"clip_id": cid, "url": ("clips/" + os.path.basename(path)) if path else None,
+                      "t_start": t0, "t_end": t0 + dur if dur else None})
+    clips.sort(key=lambda c: c["t_start"])
+    first = clips[0] if clips else {"clip_id": None, "url": None, "t_start": 0.0}
+    return {"set": set_name, "sets": compare_sets(), "questions": qd.get("questions") or [],
+            "label": qd.get("_label", ""), "label_status": qd.get("label_status", "checked"),
+            "labels": qd.get("labels") or [], "clips": clips,
+            "clip_id": first["clip_id"], "clip_url": first["url"], "clip_start": first["t_start"],
             "summaries": res.get("summaries", {}), "per_question": res.get("per_question", {}),
-            "notes": res.get("notes", []), "results_file": os.path.relpath(RESULTS_PATH, ROOT)}
+            "notes": res.get("notes", []),
+            "results_file": os.path.relpath(rpath, ROOT) if os.path.isfile(rpath) else None}
 
 
 def api_clips():
@@ -407,7 +449,8 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/compare", "/compare.html"):
                 return self._static("compare.html", head)
             if path == "/api/compare":
-                return self._json(200, api_compare(), head)
+                data = api_compare(q.get("set", "real"))
+                return self._json(200, data, head) if data else self._json(404, {"error": "no such question set"}, head)
             if path.startswith("/static/"):
                 return self._static(path[len("/static/"):], head)
             if path.startswith("/clips/"):

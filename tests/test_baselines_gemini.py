@@ -190,5 +190,79 @@ class Client(unittest.TestCase):
             shutil.rmtree(d)
 
 
+class SceneQA(FakeQA):
+    def ask_parts(self, parts, prompt, schema, repeat=0):
+        self.calls.append({"parts": parts, "prompt": prompt, "schema": schema, "repeat": repeat})
+        return {"data": self.replies[repeat % len(self.replies)], "model_version": "fake-flash-001", "cached": False}
+
+
+class Scene(unittest.TestCase):
+    CLIPS = [("b1", "/c/b1.mp4", 100.0, 109.0), ("b2", "/c/b2.mp4", 116.0, 151.0), ("b3", "/c/b3.mp4", 176.0, 186.0)]
+    OPTS = {("truck", "position", "bridge"): ["under the bridge", "in the intersection", UNKNOWN]}
+
+    def scene(self, replies, **kw):
+        from baselines_gemini import GeminiScene
+        qa = SceneQA(replies)
+        g = GeminiScene(self.CLIPS, self.OPTS, qa=qa, cut=lambda p, s: (p + f"@{s:.1f}", s), **kw)
+        g._hash = {c[1]: "h" + c[0] for c in self.CLIPS}
+        return g, qa
+
+    def test_sends_clips_seen_so_far_last_one_cut(self):
+        g, qa = self.scene([{"answer": "in the intersection", "clip_id": "b2", "t_start": 25.0, "t_end": 30.0,
+                             "stale": False, "reason": "r"}])
+        r = g.answer(None, "Where is the truck?", ["truck", "position", "bridge"], 140.0)
+        parts = qa.calls[0]["parts"]
+        self.assertEqual([p.get("video") for p in parts if "video" in p], ["/c/b1.mp4@9.0", "/c/b2.mp4@24.0"])
+        self.assertEqual(parts[0]["text"], "Clip b1: camera clock 00:01:40 to 00:01:49")
+        self.assertEqual(parts[2]["text"], "Clip b2: camera clock 00:01:56 to 00:02:20")
+        self.assertIn("2 video clip(s)", qa.calls[0]["prompt"])
+        self.assertIn("Time between clips was not recorded", qa.calls[0]["prompt"])
+        self.assertEqual(qa.calls[0]["schema"]["properties"]["clip_id"]["enum"], ["b1", "b2"])
+        self.assertEqual(qa.calls[0]["schema"]["properties"]["answer"]["enum"], self.OPTS[("truck", "position", "bridge")])
+        self.assertEqual((r["answer"], r["clip_id"], r["t_start"], r["t_end"]), ("in the intersection", "b2", 141.0, 146.0))
+        self.assertEqual(r["agreement"], "1/1")
+
+    def test_gap_question_sees_all_earlier_clips_uncut(self):
+        g, qa = self.scene([{"answer": "under the bridge", "clip_id": "b2", "t_start": 0, "t_end": 4,
+                             "stale": True, "reason": "r"}])
+        r = g.answer(None, "q", ["truck", "position", "bridge"], 160.0)
+        vids = [p["video"] for p in qa.calls[0]["parts"] if "video" in p]
+        self.assertEqual(vids, ["/c/b1.mp4@9.0", "/c/b2.mp4@35.0"])
+        self.assertTrue(r["stale"])
+
+    def test_bad_clip_id_means_no_citation_and_no_footage_means_no_call(self):
+        g, qa = self.scene([{"answer": "unknown", "clip_id": None, "t_start": None, "t_end": None,
+                             "stale": False, "reason": "r"}])
+        r = g.answer(None, "q", ["truck", "position", "bridge"], 105.0)
+        self.assertEqual((r["answer"], r["t_start"], r["clip_id"]), (None, None, None))
+        r = g.answer(None, "q", ["truck", "position", "bridge"], 50.0)
+        self.assertEqual(len(qa.calls), 1)  # before any footage: answered "unknown" without a request
+        self.assertIsNone(r["answer"])
+
+    def test_options_by_key(self):
+        from baselines_gemini import options_by_key
+        qs = [{"question_key": ["a", "b", "c"], "expected_answer": "x"},
+              {"question_key": ["a", "b", "c"], "expected_answer": None},
+              {"question_key": ["d", "e", "f"], "expected_answer": "y"},
+              {"question_key": ["a", "b", "c"], "expected_answer": "z"}]
+        self.assertEqual(options_by_key(qs), {("a", "b", "c"): ["x", "z", UNKNOWN], ("d", "e", "f"): ["y", UNKNOWN]})
+
+    def test_ask_parts_cache_uses_ids_not_bytes(self):
+        d = tempfile.mkdtemp()
+        try:
+            qa = gc.GeminiVideoQA(model="m", cache_dir=d)
+            text = json.dumps(reply("x"))
+            parts = [{"text": "Clip a"}, {"video": "/nope.mp4", "id": "ha:9.000"}]
+            with mock.patch.object(gc, "generate", return_value=(text, "m-001", {})) as gen, \
+                    mock.patch.object(gc, "video_part", return_value={"inlineData": {}}) as vp:
+                qa.ask_parts(parts, "p", {"s": 1})
+                again = qa.ask_parts(parts, "p", {"s": 1})
+            self.assertEqual((gen.call_count, vp.call_count, again["cached"]), (1, 1, True))
+            sent = gen.call_args[0][1]
+            self.assertEqual([("text" in x) for x in sent], [True, False, True])  # label, video, prompt
+        finally:
+            shutil.rmtree(d)
+
+
 if __name__ == "__main__":
     unittest.main()
