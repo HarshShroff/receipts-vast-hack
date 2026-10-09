@@ -208,20 +208,27 @@ def caption_blocked_value(caption):
 
 _WORKER_NO_RE = re.compile(
     r"\bno\s+visible\s+workers\b"
-    r"|\bno\s+other\s+workers\b"
     r"|\bno\s+workers\b"
-    r"|\bno\s+(?:other\s+)?(?:people|persons|personnel)\b"
+    r"|\bno\s+(?:people|persons|personnel)\b"
     r"|\bdevoid\s+of\s+(?:other\s+)?workers\b"
     r"|\bwithout\s+(?:any\s+)?(?:visible\s+)?workers\b",
     re.I,
 )
+# "no other workers/people" implies at least one person is already in frame → yes.
+_WORKER_NO_OTHER_YES_RE = re.compile(
+    r"\bno\s+other\s+(?:workers?|people|persons|personnel)\b",
+    re.I,
+)
 _WORKER_YES_RE = re.compile(
-    r"\ba\s+worker\s+(?:walks?|walking|stands?|standing|approaches?|approaching)\b"
+    r"\ba\s+worker\s+(?:walks?|walking|stands?|standing|approaches?|approaching|"
+    r"is\s+positioned|positioned)\b"
     r"|\bworkers\s+(?:walk|walking|stand|standing)\b"
-    r"|\ba\s+person\s+(?:walks?|walking|stands?|standing|approaches?|approaching|"
-    r"wearing|is\s+seen|is\s+standing|is\s+walking)\b"
-    r"|\bthe\s+(?:person|individual)\s+(?:walks?|walking|stands?|standing|"
-    r"approaches?|approaching|turns?\s+and\s+(?:walks?|runs?)|runs?|running)\b"
+    r"|\ba\s+(?:person|individual|worker)\s+(?:walks?|walking|stands?|standing|"
+    r"approaches?|approaching|wearing|is\s+seen|is\s+standing|is\s+walking|"
+    r"is\s+positioned|positioned)\b"
+    r"|\bthe\s+(?:person|individual|worker)\s+(?:walks?|walking|stands?|standing|"
+    r"approaches?|approaching|turns?\s+and\s+(?:walks?|runs?)|runs?|running|"
+    r"is\s+positioned|positioned|is\s+facing)\b"
     r"|\bperson\s+wearing\b",
     re.I,
 )
@@ -245,13 +252,15 @@ _PERSON_IN_SPAN = re.compile(r"\b(?:person|individual|worker|who|people)\b", re.
 def caption_worker_present(caption):
     """Return ('yes'|'no', conf) or (None, 0) when the caption is explicit about workers."""
     text = caption or ""
-    positions = [(m.start(), "no") for m in _WORKER_NO_RE.finditer(text)]
+    # Presence descriptions win over a later "no other workers…" negation.
     for m in _WORKER_YES_RE.finditer(text):
-        # Don't treat "no other workers…" fragments as presence.
         prefix = text[max(0, m.start() - 24):m.start()].lower()
         if re.search(r"\bno\b", prefix):
             continue
-        positions.append((m.start(), "yes"))
+        return "yes", 0.85
+    if _WORKER_NO_OTHER_YES_RE.search(text):
+        return "yes", 0.85
+    positions = [(m.start(), "no") for m in _WORKER_NO_RE.finditer(text)]
     if not positions:
         return None, 0.0
     positions.sort()

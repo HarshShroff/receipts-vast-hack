@@ -95,10 +95,22 @@ class ParseHelpers(unittest.TestCase):
 
     def test_worker_present_explicit(self):
         self.assertEqual(caption_worker_present("no visible workers in the aisle")[0], "no")
-        self.assertEqual(caption_worker_present("no other workers are visible")[0], "no")
+        # "no other workers" means someone is already in frame.
+        self.assertEqual(caption_worker_present("no other workers are visible")[0], "yes")
         self.assertEqual(caption_worker_present(
             "A person wearing a white shirt walks away")[0], "yes")
         self.assertIsNone(caption_worker_present("shelves stocked with boxes")[0])
+
+    def test_worker_present_police_shirt_ceiling_04(self):
+        """Exact warehouse caption: person in frame + 'no other workers' must be yes."""
+        cap = (
+            "A person wearing a white shirt with the word POLICE on the back and a white "
+            "cap stands in a warehouse with dark blue tiled flooring. The individual is "
+            "facing away from the camera, positioned near a blue forklift that is "
+            "partially visible on the right. No other workers or people are visible in "
+            "the frame."
+        )
+        self.assertEqual(caption_worker_present(cap)[0], "yes")
 
     def test_worker_present_scoped_to_camera_unless_aisle_named(self):
         cam = "sdg_warehouse_cam-2"

@@ -1437,6 +1437,10 @@ function clearDemoUi(){
   const slot=$('naive-slot');
   if(slot) slot.classList.remove('demo-hl');
 }
+function demoScrollTo(el){
+  if(!el) return;
+  try{ el.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){ el.scrollIntoView(true); }
+}
 async function playDemoBeat(i){
   if(!meta.ready || i<0 || i>=demoBeats.length) return;
   demoIdx=i;
@@ -1460,9 +1464,17 @@ async function playDemoBeat(i){
     playClip(beat.clip,{autoplay:true,highlight:[beat.clip.t_start,beat.clip.t_end]});
   }
   if(beat.mode==='naive'){
-    if(slot){ slot.classList.add('demo-hl'); slot.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+    if(slot) slot.classList.add('demo-hl');
   }
-  if(beat.mode==='stale'){
+  // Scroll the element each caption is about into view (judge recording).
+  if(beat.mode==='ask' || beat.mode==='supersede'){
+    demoScrollTo($('heroVideo')||document.querySelector('.stage')||$('changedHero'));
+    if(beat.mode==='supersede') demoScrollTo($('changedHero')||$('heroVideo'));
+  } else if(beat.mode==='naive'){
+    demoScrollTo(slot||$('naive-slot'));
+  } else if(beat.mode==='stale'){
+    demoScrollTo($('staleBanner')||$('timeStrip')||$('askOut'));
+    setTimeout(()=>demoScrollTo($('askOut')||$('timeStrip')), 350);
     toast('Demo complete — supersede + stale on the same question');
   }
 }
