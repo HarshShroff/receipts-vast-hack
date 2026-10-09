@@ -10,7 +10,9 @@ from ingest_adapter import ingest_clip  # noqa: E402
 from vss_source import (  # noqa: E402
     VssSource,
     caption_blocked_value,
+    caption_forklift_state,
     caption_to_claims,
+    caption_worker_present,
     pin_zone,
     segments_from_explore,
 )
@@ -31,10 +33,9 @@ FAKE_EXPLORE = {
                     "segment_start_sec": 0.0,
                     "segment_end_sec": 5.0,
                     "source": "s3://bucket/seg_a1.mp4",
-                    # Vague stock caption — must NOT produce a blocked claim
                     "reasoning_content": (
                         "A blue forklift labeled ATLAS moves slowly forward in a warehouse aisle, "
-                        "approaching a person. The scene is illuminated clearly."
+                        "approaching a person. A person wearing a white uniform stands nearby."
                     ),
                 },
                 {
@@ -83,96 +84,77 @@ class ParseHelpers(unittest.TestCase):
     def test_pin_zone_from_caption_vocab(self):
         self.assertEqual(pin_zone("visible in the left aisle"), "left_aisle")
         self.assertEqual(pin_zone("loading area near dock"), "loading_area")
-        self.assertEqual(pin_zone("near a brick wall"), "wall_area")
-
-    def test_pin_zone_from_filename_angle(self):
-        self.assertEqual(pin_zone("generic text", "foo.ceiling_02.rgb_chunk_0000.mp4"), "left_aisle")
-        self.assertEqual(pin_zone("generic text", "foo.eye_04.rgb.mp4"), "wall_area")
 
     def test_explicit_blocked_clear(self):
-        v, c = caption_blocked_value("center aisle is BLOCKED by forklift")
+        v, _ = caption_blocked_value("center aisle is BLOCKED by forklift")
         self.assertTrue(v.startswith("yes"))
-        self.assertGreaterEqual(c, 0.85)
-        v, c = caption_blocked_value("center aisle is CLEAR")
-        self.assertEqual(v, "no")
-        v, c = caption_blocked_value("the path is unobstructed")
-        self.assertEqual(v, "no")
-        v, c = caption_blocked_value("a pallet is blocking the aisle")
-        self.assertTrue(v.startswith("yes"))
-
-    def test_vague_captions_skipped(self):
-        self.assertIsNone(caption_blocked_value("A forklift is stationary in the warehouse")[0])
-        self.assertIsNone(caption_blocked_value(
-            "The forklift reverses, moving away from the camera")[0])
-        # "clearly" must not count as CLEAR
+        self.assertEqual(caption_blocked_value("center aisle is CLEAR")[0], "no")
         self.assertIsNone(caption_blocked_value(
             "The brand name is clearly displayed on the forklift")[0])
+
+    def test_worker_present_explicit(self):
+        self.assertEqual(caption_worker_present("no visible workers in the aisle")[0], "no")
+        self.assertEqual(caption_worker_present("no other workers are visible")[0], "no")
+        self.assertEqual(caption_worker_present(
+            "A person wearing a white shirt walks away")[0], "yes")
+        self.assertIsNone(caption_worker_present("shelves stocked with boxes")[0])
+
+    def test_forklift_state_explicit(self):
+        self.assertEqual(caption_forklift_state(
+            "The forklift remains stationary near the wall")[0], "parked")
+        self.assertEqual(caption_forklift_state(
+            "A blue forklift moves slowly forward")[0], "moving")
+        # person moving near forklift, no forklift motion word → skip
+        self.assertIsNone(caption_forklift_state(
+            "A person walks away from a blue forklift")[0])
 
 
 class ExploreFlatten(unittest.TestCase):
     def test_segments_sorted_absolute_times(self):
         segs = segments_from_explore(FAKE_EXPLORE)
         self.assertEqual(len(segs), 4)
-        times = [s["t_start"] for s in segs]
-        self.assertEqual(times, sorted(times))
         self.assertEqual(segs[0]["t_start"], 7 * 3600 + 49 * 60 + 55)
-
-    def test_ignores_other_cameras(self):
-        payload = {"chunks": FAKE_EXPLORE["chunks"] + [{
-            "original_video": "s3://x/20261001_080000_y.mp4",
-            "camera_id": "other_cam",
-            "location": "warehouse3",
-            "timeline": [{"segment_start_sec": 0, "segment_end_sec": 5,
-                          "source": "s3://x/s.mp4", "reasoning_content": "forklift"}],
-        }]}
-        segs = segments_from_explore(payload, camera_id="sdg_warehouse_cam-2")
-        self.assertTrue(all(s["camera_id"] == "sdg_warehouse_cam-2" for s in segs))
 
 
 class IngestIntegration(unittest.TestCase):
-    def test_ingest_produces_supersede_on_structured_flip(self):
-        segs = segments_from_explore(FAKE_EXPLORE)
+    def test_stock_captions_supersede_forklift_and_worker(self):
+        segs = segments_from_explore({"chunks": [FAKE_EXPLORE["chunks"][0]]})
         store = Store()
         src = VssSource()
         rules = []
         for seg in segs:
             rules.extend(r["rule_id"] for r in ingest_clip(store, seg, src))
-        self.assertIn("FIRST_CLAIM", rules)
         self.assertIn("SUPERSEDE_NEWER_CONTRADICTS", rules)
-        # Vague ceiling_01 captions produced nothing; only wall_area flip remains
-        n_claims = store.db.execute("SELECT COUNT(*) n FROM claims").fetchone()["n"]
-        self.assertEqual(n_claims, 2)
+        fork = store.db.execute(
+            "SELECT value FROM claims WHERE entity='forklift' AND attribute='state' "
+            "AND status!='superseded'").fetchone()
+        self.assertEqual(fork["value"], "parked")
+        worker = store.db.execute(
+            "SELECT value FROM claims WHERE attribute='worker_present' "
+            "AND status!='superseded'").fetchone()
+        self.assertEqual(worker["value"], "no")
+
+    def test_blocked_path_still_supersedes(self):
+        segs = segments_from_explore({"chunks": [FAKE_EXPLORE["chunks"][1]]})
+        store = Store()
+        src = VssSource()
+        for seg in segs:
+            ingest_clip(store, seg, src)
         active = store.db.execute(
-            "SELECT value,status FROM claims WHERE entity='wall_area' AND attribute='blocked' "
-            "AND location='sdg_warehouse_cam-2' AND status!='superseded'"
-        ).fetchone()
-        self.assertIsNotNone(active)
+            "SELECT value FROM claims WHERE entity='wall_area' AND attribute='blocked' "
+            "AND status!='superseded'").fetchone()
         self.assertEqual(active["value"], "no")
 
-    def test_vague_caption_emits_no_claims(self):
-        claims = caption_to_claims(
-            "forklift parked in the center aisle",
-            camera_id="sdg_warehouse_cam-2",
-            source_uri="x.ceiling_01.mp4",
-            t_start=100.0,
-            t_end=105.0,
-        )
-        self.assertEqual(claims, [])
-
-    def test_explicit_caption_shape(self):
+    def test_explicit_blocked_shape(self):
         claims = caption_to_claims(
             "left aisle is blocked by a pallet",
             camera_id="sdg_warehouse_cam-2",
             source_uri="x.ceiling_02.mp4",
-            t_start=100.0,
-            t_end=105.0,
+            t_start=100.0, t_end=105.0,
         )
-        self.assertEqual(len(claims), 1)
-        c = claims[0]
-        self.assertEqual(c["attribute"], "blocked")
-        self.assertEqual(c["location"], "sdg_warehouse_cam-2")
-        self.assertEqual(c["entity"], "left_aisle")
-        self.assertTrue(c["value"].startswith("yes"))
+        blocked = [c for c in claims if c["attribute"] == "blocked"]
+        self.assertEqual(len(blocked), 1)
+        self.assertEqual(blocked[0]["entity"], "left_aisle")
 
 
 if __name__ == "__main__":

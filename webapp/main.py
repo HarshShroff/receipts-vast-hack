@@ -69,9 +69,12 @@ def stream_url(source):
             f"source={quote(source, safe='')}&token={STATE['token']}")
 
 
-def ask(entity, as_of):
+def ask(entity, attribute, as_of):
     store = STATE["store"]
-    key = (entity, "blocked", CAMERA)
+    # forklift/state is camera-scoped; zone attributes use the selected aisle
+    if attribute == "state":
+        entity = "forklift"
+    key = (entity, attribute, CAMERA)
     r = answer(store, key, as_of, max_age=3600)
     # Attach rule ids from audit for this key's claims
     history = []
@@ -125,6 +128,7 @@ def ask(entity, as_of):
         "as_of": parse_t(as_of),
         "as_of_fmt": fmt_t(parse_t(as_of)),
         "entity": entity,
+        "attribute": attribute,
     }
 
 
@@ -169,6 +173,13 @@ PAGE = """<!DOCTYPE html>
   <p class="sub">Warehouse aisle safety — answers cite a clip, never from superseded footage.
     Camera <code>sdg_warehouse_cam-2</code> · Pack C</p>
 
+  <label for="qtype">Question</label>
+  <select id="qtype">
+    <option value="worker_present">Is a worker present in this zone?</option>
+    <option value="state">Is the forklift moving or parked?</option>
+    <option value="blocked">Is the aisle blocked? (re-ingest captions)</option>
+  </select>
+
   <label for="zone">Aisle / zone</label>
   <select id="zone">
     <option value="center_aisle">center aisle</option>
@@ -182,7 +193,7 @@ PAGE = """<!DOCTYPE html>
   <input id="asof" type="range" min="0" max="1" step="1" value="0"/>
   <p class="meta" id="coverage">Loading index…</p>
 
-  <button id="ask" type="button">Is it blocked right now?</button>
+  <button id="ask" type="button">Answer with cited clip</button>
 
   <div id="result" hidden></div>
 </main>
@@ -214,8 +225,11 @@ document.getElementById('asof').addEventListener('input', (e)=>{
 });
 document.getElementById('ask').addEventListener('click', async ()=>{
   const zone = document.getElementById('zone').value;
+  const attr = document.getElementById('qtype').value;
   const as_of = document.getElementById('asof').value;
-  const r = await fetch('api/answer?entity='+encodeURIComponent(zone)+'&as_of='+encodeURIComponent(as_of));
+  const r = await fetch('api/answer?entity='+encodeURIComponent(zone)
+    +'&attribute='+encodeURIComponent(attr)
+    +'&as_of='+encodeURIComponent(as_of));
   const d = await r.json();
   const el = document.getElementById('result');
   el.hidden = false;
@@ -235,7 +249,7 @@ document.getElementById('ask').addEventListener('click', async ()=>{
     '<p><span class="status '+(d.status||'')+'">'+(d.status||'')+'</span>' +
     (d.rule_id ? ' · rule <code>'+d.rule_id+'</code>' : '') + '</p>' +
     '<div class="answer">'+ans+'</div>' +
-    '<p class="meta">entity <code>'+d.entity+'</code> · camera <code>'+d.camera_id+
+    '<p class="meta"><code>'+d.entity+'</code> / <code>'+d.attribute+'</code> @ <code>'+d.camera_id+
     '</code> · as_of '+d.as_of_fmt+'</p>' +
     (d.clip_id ? '<p class="meta">Cited clip <code>'+d.clip_id+'</code> · '+
       d.t_start_fmt+'–'+d.t_end_fmt+'</p>' : '') +
@@ -286,10 +300,13 @@ class Handler(BaseHTTPRequestHandler):
                                   "application/json")
             q = parse_qs(parsed.query)
             entity = (q.get("entity") or ["center_aisle"])[0]
-            if entity not in ZONES:
+            attribute = (q.get("attribute") or ["worker_present"])[0]
+            if attribute not in ("worker_present", "state", "blocked"):
+                attribute = "worker_present"
+            if attribute != "state" and entity not in ZONES:
                 entity = "center_aisle"
             as_of = (q.get("as_of") or [str(STATE["t_max"])])[0]
-            return self._send(200, json.dumps(ask(entity, as_of)), "application/json")
+            return self._send(200, json.dumps(ask(entity, attribute, as_of)), "application/json")
         if path in ("/", "/index.html", "/app"):
             return self._send(200, PAGE)
         return self._send(404, "not found")

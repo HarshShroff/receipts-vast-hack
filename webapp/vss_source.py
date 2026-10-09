@@ -165,14 +165,12 @@ _CLEAR_RE = re.compile(
 def caption_blocked_value(caption):
     """Return (blocked_yes_no_detail, confidence) or (None, 0) if not explicit.
 
-    Emits a claim only when the caption states the aisle/zone is blocked/obstructed
-    or clear/unobstructed. Vague forklift/person presence is skipped (no guessing).
+    Kept for re-ingest captions that say BLOCKED/CLEAR / blocked/obstructed.
     """
     text = caption or ""
     if not text.strip():
         return None, 0.0
 
-    # Token forms from the re-ingest prompt (avoid matching "clearly").
     token_blocked = list(re.finditer(r"(?<![A-Za-z])BLOCKED(?![A-Za-z])", text))
     token_clear = list(re.finditer(r"(?<![A-Za-z])CLEAR(?![A-Za-z])", text))
     positions = ([(m.start(), "blocked") for m in _BLOCKED_RE.finditer(text)]
@@ -189,26 +187,119 @@ def caption_blocked_value(caption):
     by = _blocker(text)
     return (f"yes (by {by})" if by != "none" else "yes"), 0.9 if len(positions) == 1 else 0.85
 
-def caption_to_claims(caption, *, camera_id, source_uri, t_start, t_end, observed_at=None):
-    """Map one segment caption → blocked claim dicts (absolute times; relative=False).
 
-    Skips captions without explicit blocked/clear language. No motion side-claims.
-    """
-    value, conf = caption_blocked_value(caption)
-    if value is None:
-        return []
-    zone = pin_zone(caption, source_uri)
-    obs = observed_at if observed_at is not None else t_end
-    return [{
-        "entity": zone,
-        "attribute": "blocked",
+# --- Existing-caption attributes (explicit phrases only) ---
+
+_WORKER_NO_RE = re.compile(
+    r"\bno\s+visible\s+workers\b"
+    r"|\bno\s+other\s+workers\b"
+    r"|\bno\s+workers\b"
+    r"|\bno\s+(?:other\s+)?(?:people|persons|personnel)\b"
+    r"|\bdevoid\s+of\s+(?:other\s+)?workers\b"
+    r"|\bwithout\s+(?:any\s+)?(?:visible\s+)?workers\b",
+    re.I,
+)
+_WORKER_YES_RE = re.compile(
+    r"\ba\s+worker\s+(?:walks?|walking|stands?|standing|approaches?|approaching)\b"
+    r"|\bworkers\s+(?:walk|walking|stand|standing)\b"
+    r"|\ba\s+person\s+(?:walks?|walking|stands?|standing|approaches?|approaching|"
+    r"wearing|is\s+seen|is\s+standing|is\s+walking)\b"
+    r"|\bthe\s+(?:person|individual)\s+(?:walks?|walking|stands?|standing|"
+    r"approaches?|approaching|turns?\s+and\s+(?:walks?|runs?)|runs?|running)\b"
+    r"|\bperson\s+wearing\b",
+    re.I,
+)
+
+# Forklift state: forklift as subject, short window, no person/individual in the span.
+_FORK_PARKED_RE = re.compile(
+    r"\bforklift\b(.{0,55}?)\b(?:is\s+|appears?\s+(?:to\s+be\s+)?|remains?\s+)?"
+    r"(?:stationary|parked)\b"
+    r"|\b(?:stationary|parked)\s+forklift\b",
+    re.I | re.S,
+)
+_FORK_MOVING_RE = re.compile(
+    r"\bforklift\b(.{0,55}?)\b(?:is\s+|then\s+|begins?\s+to\s+)?"
+    r"(?:moving|moves|drove|drives|driving|traveling|travels|reverses?|rolling)\b"
+    r"|\b(?:moving|driving)\s+forklift\b",
+    re.I | re.S,
+)
+_PERSON_IN_SPAN = re.compile(r"\b(?:person|individual|worker|who|people)\b", re.I)
+
+
+def caption_worker_present(caption):
+    """Return ('yes'|'no', conf) or (None, 0) when the caption is explicit about workers."""
+    text = caption or ""
+    positions = [(m.start(), "no") for m in _WORKER_NO_RE.finditer(text)]
+    for m in _WORKER_YES_RE.finditer(text):
+        # Don't treat "no other workers…" fragments as presence.
+        prefix = text[max(0, m.start() - 24):m.start()].lower()
+        if re.search(r"\bno\b", prefix):
+            continue
+        positions.append((m.start(), "yes"))
+    if not positions:
+        return None, 0.0
+    positions.sort()
+    return positions[-1][1], 0.85
+
+
+def caption_forklift_state(caption):
+    """Return ('moving'|'parked', conf) or (None, 0) when forklift motion is explicit."""
+    text = caption or ""
+    if not re.search(r"\bforklift\b", text, re.I):
+        return None, 0.0
+    positions = []
+    for label, cre in (("parked", _FORK_PARKED_RE), ("moving", _FORK_MOVING_RE)):
+        for m in cre.finditer(text):
+            # Group 1 is the between-span when present; reject person-as-subject bridges.
+            mid = m.group(1) if m.lastindex else ""
+            if mid and _PERSON_IN_SPAN.search(mid):
+                continue
+            positions.append((m.start(), label))
+    if not positions:
+        return None, 0.0
+    positions.sort()
+    return positions[-1][1], 0.85
+
+
+def _claim(entity, attribute, value, location, t_start, t_end, observed_at, confidence):
+    return {
+        "entity": entity,
+        "attribute": attribute,
         "value": value,
-        "location": camera_id,
+        "location": location,
         "t_start": float(t_start),
         "t_end": float(t_end),
-        "observed_at": float(obs),
-        "confidence": conf,
-    }]
+        "observed_at": float(observed_at),
+        "confidence": confidence,
+    }
+
+
+def caption_to_claims(caption, *, camera_id, source_uri, t_start, t_end, observed_at=None):
+    """Map one caption → claim dicts (absolute times; relative=False).
+
+    Emits, when the caption is explicit:
+      - (zone, blocked, yes/no…) — re-ingest BLOCKED/CLEAR path
+      - (zone, worker_present, yes/no) — stock captions
+      - (forklift, state, moving|parked) — stock captions
+    Vague captions yield [].
+    """
+    obs = observed_at if observed_at is not None else t_end
+    zone = pin_zone(caption, source_uri)
+    out = []
+
+    blocked, bconf = caption_blocked_value(caption)
+    if blocked is not None:
+        out.append(_claim(zone, "blocked", blocked, camera_id, t_start, t_end, obs, bconf))
+
+    worker, wconf = caption_worker_present(caption)
+    if worker is not None:
+        out.append(_claim(zone, "worker_present", worker, camera_id, t_start, t_end, obs, wconf))
+
+    fstate, fconf = caption_forklift_state(caption)
+    if fstate is not None:
+        out.append(_claim("forklift", "state", fstate, camera_id, t_start, t_end, obs, fconf))
+
+    return out
 
 
 def segments_from_explore(payload, *, camera_id="sdg_warehouse_cam-2", location="warehouse3"):

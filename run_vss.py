@@ -27,7 +27,7 @@ def main(argv=None):
     p.add_argument("--limit", type=int, default=100)
     p.add_argument("--explore-json", default="",
                    help="offline: path to explore JSON (skip network)")
-    p.add_argument("--demo-key", default="center_aisle|blocked|sdg_warehouse_cam-2",
+    p.add_argument("--demo-key", default="forklift|state|sdg_warehouse_cam-2",
                    help="question key to answer after ingest")
     args = p.parse_args(argv)
 
@@ -81,10 +81,10 @@ def main(argv=None):
         print(f"  clip={r['clip_id']} t={r['t_start']}-{r['t_end']}")
         if r["history"]:
             print(f"  history={r['history']}")
-        # Also try wall_area / left_aisle if center empty
         if r["answer"] is None:
-            for alt in ("wall_area", "left_aisle", "right_aisle", "loading_area"):
-                k2 = f"{alt}|blocked|{args.camera_id}"
+            for k2 in (f"center_aisle|worker_present|{args.camera_id}",
+                       f"wall_area|worker_present|{args.camera_id}",
+                       f"forklift|state|{args.camera_id}"):
                 r2 = answer(store, k2, cov, max_age=3600)
                 if r2["answer"] is not None:
                     print(f"\n=== answer({k2!r}) ===")
