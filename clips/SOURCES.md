@@ -11,5 +11,7 @@ Order within each scene = time order. Shared timeline: use the file order.
 | garage_01_cluttered.mp4 | "Garage Time Lapse - The video you've all been waiting for!", Panther TheCat, https://www.youtube.com/watch?v=A0nLZoAcbks (CC BY) | 0-12 | garage floor cluttered: bins, boxes, red bucket, items scattered |
 | garage_02_cleared.mp4 | same | 60-70 | garage floor cleared, chair and tree remain, evening light |
 
+| person_moving.mp4 | our own footage, recorded at the venue 2026-10-09 (1080p, 8.6 s) | whole | one person left of a white pillar, thumbs up, steps behind it, reappears on the right. Room audio contained other people's conversations and was stripped (`ffmpeg -c:v copy -an`); the viewer only serves this audio-free copy |
+
 Expected supersession: bridge underpass clear -> blocked -> clear. Garage floor: cluttered -> clear.
 Boundaries checked by eye on 1 fps frame sheets (2026-10-09), not by full playback.
