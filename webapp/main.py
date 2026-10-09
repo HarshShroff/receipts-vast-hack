@@ -413,28 +413,36 @@ def answer_for_playing_clip(store, key, as_of, max_age=3600):
     }
     if not seg:
         return empty
-    row = store.db.execute("""
-        SELECT c.id, c.value, c.status, c.clip_id, c.t_start, c.t_end, c.observed_at,
+    rows = store.db.execute("""
+        SELECT c.id, c.value, c.status, c.superseded_by, c.clip_id,
                e.clip_id AS ev_clip, e.t_start AS ev_t_start, e.t_end AS ev_t_end,
                e.observed_at AS ev_obs
         FROM claims c
         JOIN evidence e ON e.claim_id = c.id
         WHERE c.entity=? AND c.attribute=? AND c.location=?
           AND e.clip_id=? AND e.observed_at <= ?
-          AND (c.superseded_by IS NULL OR EXISTS (
-                SELECT 1 FROM claims s WHERE s.id = c.superseded_by AND s.observed_at > ?
-              ))
-        ORDER BY e.observed_at DESC, c.id DESC LIMIT 1
-    """, (entity, attribute, location, seg["clip_id"], as_of, as_of)).fetchone()
+        ORDER BY e.observed_at DESC, c.id DESC
+    """, (entity, attribute, location, seg["clip_id"], as_of)).fetchall()
+    row = None
+    for cand in rows:
+        sid = cand["superseded_by"]
+        if sid is None:
+            row = cand
+            break
+        sup = store.db.execute(
+            "SELECT observed_at FROM claims WHERE id=?", (sid,)).fetchone()
+        # Still active at as_of if superseder is in the future (or missing).
+        if not sup or sup["observed_at"] > as_of:
+            row = cand
+            break
     if not row:
         return empty
-    out = answer(store, key, as_of, max_age=max_age)
-    # Re-bind to the playing-clip evidence (answer() may pick a different clip).
-    out.update(
-        answer=row["value"], claim_id=row["id"], clip_id=row["ev_clip"],
-        t_start=row["ev_t_start"], t_end=row["ev_t_end"], status="active",
-        unconfirmed=False,
-    )
+    out = {
+        "answer": row["value"], "claim_id": row["id"], "clip_id": row["ev_clip"],
+        "t_start": row["ev_t_start"], "t_end": row["ev_t_end"],
+        "status": "active", "stale": False, "stale_reason": None,
+        "data_gap_note": None, "history": [], "unconfirmed": False,
+    }
     reasons = []
     age = as_of - row["ev_obs"]
     if age > max_age:
@@ -444,8 +452,6 @@ def answer_for_playing_clip(store, key, as_of, max_age=3600):
         reasons.append(f"footage ends {fmt_t(cov)}, before as_of {fmt_t(as_of)}")
     if reasons:
         out.update(stale=True, status="stale", stale_reason="; ".join(reasons))
-    else:
-        out.update(stale=False, stale_reason=None)
     return out
 
 
