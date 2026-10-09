@@ -40,12 +40,17 @@ _ANGLE_ZONE = {
     "eye_04": "wall_area",
 }
 
-_ZONE_PATTERNS = (
+# Explicit aisle/area names only (used for worker_present scoping).
+_ZONE_NAMED_PATTERNS = (
     (r"\bleft\s+aisle\b", "left_aisle"),
     (r"\bright\s+aisle\b", "right_aisle"),
     (r"\bcenter\s+aisle\b|\bmiddle\s+aisle\b", "center_aisle"),
     (r"\bloading\s+(area|dock|bay)\b", "loading_area"),
-    (r"\bwall\s+area\b|\bnear (a |the )?wall\b|\bbrick wall\b", "wall_area"),
+    (r"\bwall\s+area\b", "wall_area"),
+)
+# Broader cues + bare "aisle" — only for blocked pin_zone fallbacks, not worker_present.
+_ZONE_LOOSE_PATTERNS = _ZONE_NAMED_PATTERNS + (
+    (r"\bnear (a |the )?wall\b|\bbrick wall\b", "wall_area"),
     (r"\bwarehouse aisle\b|\bin an? aisle\b|\baisle\b", "center_aisle"),
 )
 
@@ -117,11 +122,22 @@ def angle_from_name(name_or_uri):
     return m.group(1) if m else None
 
 
+def zone_named_in_caption(caption):
+    """Return a ZONES member only when caption explicitly names left/center/right/loading/wall area."""
+    low = (caption or "").lower()
+    for pat, zone in _ZONE_NAMED_PATTERNS:
+        if re.search(pat, low):
+            return zone
+    return None
+
+
 def pin_zone(caption, name_or_uri=""):
-    """Return a ZONES member. Prefer caption vocabulary; else filename angle; else center_aisle."""
-    text = caption or ""
-    low = text.lower()
-    for pat, zone in _ZONE_PATTERNS:
+    """Return a ZONES member. Prefer caption vocabulary; else filename angle; else center_aisle.
+
+    Used for blocked/CLEAR aisle claims. Prefer zone_named_in_caption for worker_present.
+    """
+    low = (caption or "").lower()
+    for pat, zone in _ZONE_LOOSE_PATTERNS:
         if re.search(pat, low):
             return zone
     angle = angle_from_name(name_or_uri)
@@ -278,22 +294,26 @@ def caption_to_claims(caption, *, camera_id, source_uri, t_start, t_end, observe
     """Map one caption → claim dicts (absolute times; relative=False).
 
     Emits, when the caption is explicit:
-      - (zone, blocked, yes/no…) — re-ingest BLOCKED/CLEAR path
-      - (zone, worker_present, yes/no) — stock captions
+      - (zone, blocked, …) — re-ingest BLOCKED/CLEAR (zone from caption or angle pin)
+      - (camera_id|zone, worker_present, yes/no) — camera-scoped unless caption names an aisle
       - (forklift, state, moving|parked) — stock captions
     Vague captions yield [].
     """
     obs = observed_at if observed_at is not None else t_end
-    zone = pin_zone(caption, source_uri)
     out = []
 
     blocked, bconf = caption_blocked_value(caption)
     if blocked is not None:
+        zone = pin_zone(caption, source_uri)
         out.append(_claim(zone, "blocked", blocked, camera_id, t_start, t_end, obs, bconf))
 
     worker, wconf = caption_worker_present(caption)
     if worker is not None:
-        out.append(_claim(zone, "worker_present", worker, camera_id, t_start, t_end, obs, wconf))
+        # One worker in frame must not light every aisle — only name a zone when caption does.
+        named = zone_named_in_caption(caption)
+        worker_entity = named if named else camera_id
+        out.append(_claim(worker_entity, "worker_present", worker, camera_id,
+                          t_start, t_end, obs, wconf))
 
     fstate, fconf = caption_forklift_state(caption)
     if fstate is not None:

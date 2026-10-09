@@ -15,6 +15,7 @@ from vss_source import (  # noqa: E402
     caption_worker_present,
     pin_zone,
     segments_from_explore,
+    zone_named_in_caption,
 )
 
 
@@ -44,8 +45,8 @@ FAKE_EXPLORE = {
                     "segment_end_sec": 10.0,
                     "source": "s3://bucket/seg_a2.mp4",
                     "reasoning_content": (
-                        "The forklift remains stationary. The person walks away across an empty "
-                        "warehouse floor with no other workers or activity."
+                        "The forklift remains stationary near the wall. "
+                        "No visible workers remain in the warehouse."
                     ),
                 },
             ],
@@ -99,6 +100,30 @@ class ParseHelpers(unittest.TestCase):
             "A person wearing a white shirt walks away")[0], "yes")
         self.assertIsNone(caption_worker_present("shelves stocked with boxes")[0])
 
+    def test_worker_present_scoped_to_camera_unless_aisle_named(self):
+        cam = "sdg_warehouse_cam-2"
+        # Filename angle must NOT invent an aisle for worker_present.
+        claims = caption_to_claims(
+            "A person wearing a white shirt walks across the warehouse floor.",
+            camera_id=cam, source_uri="x.ceiling_02.rgb_chunk_0000.mp4",
+            t_start=100.0, t_end=105.0,
+        )
+        workers = [c for c in claims if c["attribute"] == "worker_present"]
+        self.assertEqual(len(workers), 1)
+        self.assertEqual(workers[0]["entity"], cam)
+        self.assertEqual(workers[0]["location"], cam)
+        self.assertIsNone(zone_named_in_caption(
+            "A person wearing a white shirt walks across the warehouse floor."))
+        # Explicit aisle in caption → zone entity.
+        named = caption_to_claims(
+            "A worker walks down the left aisle.",
+            camera_id=cam, source_uri="x.ceiling_02.rgb_chunk_0000.mp4",
+            t_start=100.0, t_end=105.0,
+        )
+        w2 = [c for c in named if c["attribute"] == "worker_present"][0]
+        self.assertEqual(w2["entity"], "left_aisle")
+        self.assertEqual(w2["location"], cam)
+
     def test_forklift_state_explicit(self):
         self.assertEqual(caption_forklift_state(
             "The forklift remains stationary near the wall")[0], "parked")
@@ -130,9 +155,11 @@ class IngestIntegration(unittest.TestCase):
             "AND status!='superseded'").fetchone()
         self.assertEqual(fork["value"], "parked")
         worker = store.db.execute(
-            "SELECT value FROM claims WHERE attribute='worker_present' "
+            "SELECT entity, value FROM claims WHERE attribute='worker_present' "
             "AND status!='superseded'").fetchone()
         self.assertEqual(worker["value"], "no")
+        # Camera-scoped (no aisle named in those stock captions).
+        self.assertEqual(worker["entity"], "sdg_warehouse_cam-2")
 
     def test_blocked_path_still_supersedes(self):
         segs = segments_from_explore({"chunks": [FAKE_EXPLORE["chunks"][1]]})

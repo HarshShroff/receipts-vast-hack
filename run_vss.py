@@ -90,8 +90,8 @@ def main(argv=None):
         if r["history"]:
             print(f"  history={r['history']}")
         if r["answer"] is None:
-            for k2 in (f"center_aisle|worker_present|{args.camera_id}",
-                       f"wall_area|worker_present|{args.camera_id}",
+            for k2 in (f"{args.camera_id}|worker_present|{args.camera_id}",
+                       f"center_aisle|worker_present|{args.camera_id}",
                        f"forklift|state|{args.camera_id}"):
                 r2 = answer(store, k2, cov, max_age=3600)
                 if r2["answer"] is not None:

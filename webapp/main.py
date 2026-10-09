@@ -27,6 +27,11 @@ POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL_SEC", "45"))
 ZONES = ("left_aisle", "center_aisle", "right_aisle", "loading_area", "wall_area")
 STALE_BANNER_GAP = 120.0  # seconds of no footage → STALE banner
 
+
+def camera_label(cam_id=None):
+    """Single naming: always the segment camera_id (never a shortened alias)."""
+    return cam_id or CAMERA
+
 STATE = {
     "store": None,
     "token": None,
@@ -39,7 +44,7 @@ STATE = {
     "known_clips": set(),
     "event_log": [],  # chronological replay events
     "default_as_of": None,  # first forklift moving→parked supersede
-    "default_question": "Is the forklift on cam-2 moving?",
+    "default_question": f"Is the forklift on {CAMERA} moving?",
     "frame_paths": {},
     "lock": threading.RLock(),
 }
@@ -200,6 +205,7 @@ def segment_playlist():
         "path": r["path"],
         "t_start": r["t_start"],
         "t_end": r["t_end"],
+        "camera_id": CAMERA,
         "caption": (r["description"] or "")[:240],
         "stream_url": stream_url(r["path"], clip_id=r["clip_id"]),
         "frames_url": f"api/frames?clip_id={quote(r['clip_id'], safe='')}",
@@ -260,7 +266,7 @@ def _ingest_one(store, seg, src):
                 "clip_id": seg["clip_id"],
                 "t_end": float(seg["t_end"]),
                 "toast": (f"SUPERSEDED: {old_val} → {row['value']} "
-                          f"({CAMERA.split('_')[-1]}, {_seg_label(seg['clip_id'])})"),
+                          f"({camera_label()}, {_seg_label(seg['clip_id'])})"),
             })
     events.insert(0, {
         "type": "segment",
@@ -387,7 +393,7 @@ def board(as_of):
     tiles.append({
         "id": "forklift_state",
         "label": "FORKLIFT",
-        "sub": CAMERA.replace("sdg_warehouse_", ""),
+        "sub": camera_label(),
         "entity": "forklift",
         "attribute": "state",
         "value": r["answer"],
@@ -408,44 +414,76 @@ def board(as_of):
             if cov is not None and (as_of - cov) > STALE_BANNER_GAP else None
         ),
     })
+    # Camera-scoped worker_present (default). Zone tiles only when caption named an aisle.
+    r = answer(store, (CAMERA, "worker_present", CAMERA), as_of, max_age=3600)
+    last = None
+    if r["claim_id"]:
+        ev = store.db.execute(
+            "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
+            (r["claim_id"],)).fetchone()
+        last = ev["m"] if ev else r["t_end"]
+    age = (as_of - last) if last is not None else None
+    w_stale = bool(r.get("stale"))
+    tiles.append({
+        "id": f"worker_{CAMERA}",
+        "label": "WORKER PRESENT",
+        "sub": camera_label(),
+        "entity": CAMERA,
+        "attribute": "worker_present",
+        "value": r["answer"],
+        "display": (
+            "YES" if r["answer"] == "yes" else
+            "NO" if r["answer"] == "no" else
+            (str(r["answer"]).upper() if r["answer"] else "—")
+        ),
+        "tone": tile_tone("worker_present", r["answer"], w_stale or r["answer"] is None),
+        "status": (r["status"] or "no_evidence").upper(),
+        "last_confirmed": last,
+        "last_confirmed_fmt": fmt_t(last) if last is not None else None,
+        "age_sec": age,
+        "stale": w_stale,
+        "clip_id": r["clip_id"],
+        "stale_banner": None,
+    })
     for zone in ZONES:
         r = answer(store, (zone, "worker_present", CAMERA), as_of, max_age=3600)
-        last = None
-        if r["claim_id"]:
-            ev = store.db.execute(
-                "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
-                (r["claim_id"],)).fetchone()
-            last = ev["m"] if ev else r["t_end"]
-        age = (as_of - last) if last is not None else None
-        zone_stale = bool(r.get("stale"))
-        tiles.append({
-            "id": f"worker_{zone}",
-            "label": "WORKER PRESENT",
-            "sub": zone.replace("_", " "),
-            "entity": zone,
-            "attribute": "worker_present",
-            "value": r["answer"],
-            "display": (
-                "YES" if r["answer"] == "yes" else
-                "NO" if r["answer"] == "no" else
-                (str(r["answer"]).upper() if r["answer"] else "—")
-            ),
-            "tone": tile_tone("worker_present", r["answer"], zone_stale or r["answer"] is None),
-            "status": (r["status"] or "no_evidence").upper(),
-            "last_confirmed": last,
-            "last_confirmed_fmt": fmt_t(last) if last is not None else None,
-            "age_sec": age,
-            "stale": zone_stale,
-            "clip_id": r["clip_id"],
-            "stale_banner": None,
-        })
+        if r["answer"] is not None:
+            last = None
+            if r["claim_id"]:
+                ev = store.db.execute(
+                    "SELECT MAX(observed_at) m FROM evidence WHERE claim_id=?",
+                    (r["claim_id"],)).fetchone()
+                last = ev["m"] if ev else r["t_end"]
+            age = (as_of - last) if last is not None else None
+            zone_stale = bool(r.get("stale"))
+            tiles.append({
+                "id": f"worker_{zone}",
+                "label": "WORKER PRESENT",
+                "sub": f"{camera_label()} · {zone.replace('_', ' ')}",
+                "entity": zone,
+                "attribute": "worker_present",
+                "value": r["answer"],
+                "display": (
+                    "YES" if r["answer"] == "yes" else
+                    "NO" if r["answer"] == "no" else
+                    (str(r["answer"]).upper() if r["answer"] else "—")
+                ),
+                "tone": tile_tone("worker_present", r["answer"], zone_stale),
+                "status": (r["status"] or "no_evidence").upper(),
+                "last_confirmed": last,
+                "last_confirmed_fmt": fmt_t(last) if last is not None else None,
+                "age_sec": age,
+                "stale": zone_stale,
+                "clip_id": r["clip_id"],
+                "stale_banner": None,
+            })
         # blocked tiles only when we have a claim (re-ingest path)
         rb = answer(store, (zone, "blocked", CAMERA), as_of, max_age=3600)
         if rb["answer"] is not None:
             tiles.append({
                 "id": f"blocked_{zone}",
                 "label": "AISLE BLOCKED",
-                "sub": zone.replace("_", " "),
+                "sub": f"{camera_label()} · {zone.replace('_', ' ')}",
                 "entity": zone,
                 "attribute": "blocked",
                 "value": rb["answer"],
@@ -619,25 +657,30 @@ def demo_as_of():
 
 
 def parse_nl_question(q):
-    """Map a natural question to entity/attribute. Fallback center_aisle/worker_present."""
+    """Map a natural question to entity/attribute.
+
+    worker_present defaults to the camera entity (camera-scoped) unless an aisle is named.
+    """
     text = (q or "").lower()
     attr = "worker_present"
-    entity = "center_aisle"
+    entity = CAMERA
     if "forklift" in text or "moving" in text or "parked" in text:
         attr = "state"
         entity = "forklift"
     elif "block" in text or "clear" in text or "obstruct" in text:
         attr = "blocked"
-    if "left" in text:
-        entity = "left_aisle" if attr != "state" else entity
-    elif "right" in text:
-        entity = "right_aisle" if attr != "state" else entity
-    elif "loading" in text:
-        entity = "loading_area" if attr != "state" else entity
-    elif "wall" in text:
-        entity = "wall_area" if attr != "state" else entity
-    elif "center" in text or "middle" in text:
-        entity = "center_aisle" if attr != "state" else entity
+        entity = "center_aisle"
+    if attr in ("worker_present", "blocked"):
+        if "left" in text:
+            entity = "left_aisle"
+        elif "right" in text:
+            entity = "right_aisle"
+        elif "loading" in text:
+            entity = "loading_area"
+        elif "wall" in text:
+            entity = "wall_area"
+        elif "center" in text or "middle" in text:
+            entity = "center_aisle"
     return entity, attr
 
 
@@ -752,7 +795,7 @@ footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;let
 <header>
   <div>
     <h1>RECEIPTS <span>— every answer has a clip</span></h1>
-    <p class="tagline">Warehouse ops · cam-2 · Pack C · footage first, then the claim</p>
+    <p class="tagline">Warehouse ops · <code id="camLabel">sdg_warehouse_cam-2</code> · Pack C · footage first, then the claim</p>
   </div>
   <div class="live-ctl">
     <label><span class="live-dot" id="liveDot"></span>
@@ -784,13 +827,13 @@ footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;let
   <section>
     <h2>ASK</h2>
     <div class="ask-row">
-      <input id="q" type="text" placeholder="Is the forklift on cam-2 moving?" value="Is the forklift on cam-2 moving?"/>
+      <input id="q" type="text" placeholder="Is the forklift on sdg_warehouse_cam-2 moving?" value="Is the forklift on sdg_warehouse_cam-2 moving?"/>
       <button id="askBtn" type="button">Answer</button>
     </div>
     <div class="presets">
-      <button type="button" data-q="Is the forklift on cam-2 moving?">forklift moving?</button>
-      <button type="button" data-q="Is a worker present in the center aisle?">worker center?</button>
-      <button type="button" data-q="Is a worker present near the wall?">worker wall?</button>
+      <button type="button" data-q="Is the forklift on sdg_warehouse_cam-2 moving?">forklift moving?</button>
+      <button type="button" data-q="Is a worker present on sdg_warehouse_cam-2?">worker present?</button>
+      <button type="button" data-q="Is a worker present in the left aisle?">worker left aisle?</button>
       <button type="button" data-q="Is the left aisle blocked?">aisle blocked?</button>
     </div>
     <div id="askOut"></div>
@@ -884,7 +927,8 @@ function playClip(clip, {autoplay=true, highlight=null}={}){
   vid.style.display='block';
   currentClipId=clip.clip_id;
   citeRange=highlight;
-  $('playClip').textContent=shortClip(clip.clip_id);
+  const cam=clip.camera_id||meta.camera_id||'sdg_warehouse_cam-2';
+  $('playClip').textContent=cam+' · '+shortClip(clip.clip_id);
   $('playRange').textContent=fmt(clip.t_start)+'–'+fmt(clip.t_end)
     +(highlight?(' · cited '+fmt(highlight[0])+'–'+fmt(highlight[1])):'');
   $('playStatus').textContent='loading segment…';
@@ -993,6 +1037,15 @@ let didAutoAsk=false;
 async function init(){
   const r=await fetch('api/meta');
   meta=await r.json();
+  const cam=meta.camera_id||'sdg_warehouse_cam-2';
+  if($('camLabel')) $('camLabel').textContent=cam;
+  const forkQ='Is the forklift on '+cam+' moving?';
+  const workerQ='Is a worker present on '+cam+'?';
+  $('q').placeholder=forkQ;
+  document.querySelectorAll('.presets button').forEach(b=>{
+    if((b.dataset.q||'').includes('forklift')) b.dataset.q=forkQ;
+    if((b.dataset.q||'').includes('worker present on')) b.dataset.q=workerQ;
+  });
   const sl=$('scrub');
   sl.min=Math.floor(meta.t_min);
   sl.max=Math.ceil(meta.t_max);
@@ -1011,7 +1064,7 @@ async function init(){
     await refreshTimeline();
     if(!didAutoAsk && !liveOn){
       didAutoAsk=true;
-      $('q').value='Is the forklift on cam-2 moving?';
+      $('q').value=forkQ;
       await doAsk();
     }
   }
