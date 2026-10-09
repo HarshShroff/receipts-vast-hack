@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from answer import answer  # noqa: E402
 from claims import Store, fmt_t, parse_t  # noqa: E402
 from ingest_adapter import ingest_clip  # noqa: E402
+from naive import naive_answer  # noqa: E402
 from vss_source import VssSource, fetch_warehouse_segments, login  # noqa: E402
 
 PORT = int(os.environ.get("PORT", "8080"))
@@ -689,7 +690,7 @@ PAGE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>RECEIPTS — every answer has a clip</title>
+<title>RECEIPTS — video answers that know when they're out of date</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -708,39 +709,46 @@ body{margin:0;min-height:100vh;color:var(--fg);
 }
 header{padding:.85rem 1.25rem .55rem;display:flex;flex-wrap:wrap;align-items:flex-end;gap:1rem;justify-content:space-between;
   border-bottom:1px solid var(--line)}
-header h1{font-family:Syne,sans-serif;font-size:clamp(1.45rem,3.5vw,2.1rem);letter-spacing:.02em;margin:0;line-height:1}
+header h1{font-family:Syne,sans-serif;font-size:clamp(1.35rem,3.2vw,1.95rem);letter-spacing:.01em;margin:0;line-height:1.05}
 header h1 span{color:var(--accent)}
-header .tagline{color:var(--muted);font-size:.8rem;margin:.2rem 0 0}
+header .tagline{color:var(--muted);font-size:.78rem;margin:.35rem 0 0;max-width:42rem;line-height:1.4}
 .live-ctl{display:flex;align-items:center;gap:.75rem;background:var(--panel);border:1px solid var(--line);padding:.5rem .8rem}
 .live-ctl label{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;font-size:.78rem;letter-spacing:.06em}
 .live-ctl input{accent-color:var(--green);width:1.1rem;height:1.1rem}
-.live-hint{color:var(--muted);font-size:.7rem;max-width:15rem;line-height:1.35}
+.live-hint{color:var(--muted);font-size:.7rem;max-width:14rem;line-height:1.35}
 .live-dot{width:.55rem;height:.55rem;border-radius:50%;background:var(--stale);display:inline-block}
 .live-dot.on{background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1.2s infinite}
 @keyframes pulse{50%{opacity:.45}}
 main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
-.stage{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,.9fr);gap:.85rem;align-items:start}
-@media (max-width:900px){.stage{grid-template-columns:1fr}}
-.player-wrap{background:#000;border:1px solid var(--line);position:relative;min-height:280px}
-#heroVideo{width:100%;display:block;max-height:min(62vh,560px);background:#000;aspect-ratio:16/9;object-fit:contain}
+.stage{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);gap:.85rem;align-items:start}
+@media (max-width:960px){.stage{grid-template-columns:1fr}}
+.player-wrap{background:#000;border:1px solid var(--line);position:relative}
+#heroVideo{width:100%;display:block;max-height:min(52vh,480px);background:#000;aspect-ratio:16/9;object-fit:contain}
 #frameStrip{display:none;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:4px;padding:4px;background:#0a0d0b}
 #frameStrip.show{display:grid}
 #frameStrip img{width:100%;height:100px;object-fit:cover;border:1px solid var(--line)}
-.player-meta{display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.45rem .55rem;background:var(--panel);border:1px solid var(--line);border-top:0;font-size:.72rem;color:var(--muted)}
+.vbar{display:grid;grid-template-columns:auto 1fr auto auto;gap:.45rem;align-items:center;
+  padding:.4rem .55rem;background:#0e1210;border:1px solid var(--line);border-top:0;font-size:.72rem}
+.vbar button{background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:.3rem .55rem;cursor:pointer;font:inherit}
+.vtrack{position:relative;height:10px;background:#243028;cursor:pointer}
+.vfill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);width:0}
+.vcite{position:absolute;top:0;bottom:0;background:rgba(228,87,74,.45);border:1px solid var(--red);pointer-events:none}
+.player-meta{display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.4rem .55rem;background:var(--panel);border:1px solid var(--line);border-top:0;font-size:.72rem;color:var(--muted)}
 .player-meta strong{color:var(--fg)}
 .range-tag{color:var(--amber)}
-.side-tiles{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
-.side-tiles .tile{min-height:96px;padding:.75rem .7rem}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.65rem;margin-top:.85rem}
+.side-tiles{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,minmax(88px,auto));gap:.5rem}
+.side-tiles .tile{min-height:88px;padding:.65rem .6rem}
+.legend{display:flex;flex-wrap:wrap;gap:.55rem;margin:.45rem 0 .2rem;font-size:.68rem;color:var(--muted)}
+.legend i{display:inline-block;width:.55rem;height:.55rem;margin-right:.25rem;vertical-align:middle}
+.legend .g{background:var(--green)}.legend .a{background:var(--amber)}.legend .r{background:var(--red)}.legend .s{background:var(--stale)}
 .tile{position:relative;background:var(--panel);border:1px solid var(--line);padding:.85rem .75rem .7rem;
   min-height:110px;overflow:hidden;transition:border-color .25s, background .25s, transform .35s}
 .tile.flash{animation:claimIn .55s ease}
 @keyframes claimIn{from{transform:translateY(8px);opacity:.15}to{transform:none;opacity:1}}
 .tile .lbl{font-size:.62rem;letter-spacing:.12em;color:var(--muted)}
-.tile .sub{font-size:.68rem;color:var(--muted);margin-top:.1rem;text-transform:uppercase}
-.tile .val{font-family:Syne,sans-serif;font-size:1.35rem;font-weight:700;margin:.4rem 0 .25rem;letter-spacing:.02em}
-.tile .val.strike{text-decoration:line-through;color:var(--red);animation:strikeFlash .7s ease}
-@keyframes strikeFlash{0%,100%{opacity:1}40%{opacity:.25;color:#fff}}
+.tile .sub{font-size:.65rem;color:var(--muted);margin-top:.1rem;word-break:break-all}
+.tile .val{font-family:Syne,sans-serif;font-size:1.25rem;font-weight:700;margin:.35rem 0 .2rem;letter-spacing:.02em}
+.tile .val .strike{text-decoration:line-through;color:var(--red);margin-right:.3rem}
 .tile .age{font-size:.65rem;color:var(--muted)}
 .tile.green{border-color:rgba(61,207,122,.45)}
 .tile.green .val{color:var(--green)}
@@ -748,26 +756,33 @@ main{padding:.75rem 1.25rem 5rem;max-width:1280px;margin:0 auto}
 .tile.amber .val{color:var(--amber)}
 .tile.red{border-color:rgba(228,87,74,.55)}
 .tile.red .val{color:var(--red)}
-.tile.stale{opacity:.55;filter:grayscale(.7);border-color:#333}
-.tile.stale .val{color:var(--stale)}
-.clock{color:var(--muted);font-size:.75rem;margin:.35rem 0 .65rem}
+.tile.stale,.tile.empty{opacity:.55;filter:grayscale(.65);border-color:#333}
+.tile.stale .val,.tile.empty .val{color:var(--stale)}
+.clock{color:var(--muted);font-size:.75rem;margin:.35rem 0 .45rem}
+#timeStrip{font-size:.82rem;letter-spacing:.02em;padding:.45rem .65rem;border:1px solid var(--line);background:var(--panel);margin:.2rem 0 .55rem}
+#timeStrip.stale{background:#2a1e1c;border-color:#5a3530;color:#f0b4ae}
 .banner{margin:.5rem 0;padding:.5rem .7rem;background:#2a1e1c;border:1px solid #5a3530;color:#f0b4ae;font-size:.75rem}
-section{margin-top:1.5rem}
+#evalPanel img{display:block}
+section{margin-top:1.35rem}
 section h2{font-family:Syne,sans-serif;font-size:.95rem;letter-spacing:.08em;margin:0 0 .65rem;color:var(--accent)}
 .ask-row{display:flex;gap:.5rem;flex-wrap:wrap}
 .ask-row input[type=text]{flex:1;min-width:220px;background:#0e1210;border:1px solid var(--line);color:var(--fg);
   padding:.65rem .75rem;font:inherit;font-size:.88rem}
-.ask-row button{background:var(--accent);color:#0b120e;border:0;padding:.65rem 1rem;font:inherit;font-weight:600;cursor:pointer}
+.ask-row button,.demo-btn{background:var(--accent);color:#0b120e;border:0;padding:.65rem 1rem;font:inherit;font-weight:600;cursor:pointer}
 .presets{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0 0}
 .presets button{background:transparent;border:1px solid var(--line);color:var(--muted);padding:.3rem .5rem;font:inherit;font-size:.68rem;cursor:pointer}
 .presets button:hover{border-color:var(--accent);color:var(--fg)}
-#askOut{margin-top:.85rem;background:var(--panel);border:1px solid var(--line);padding:.9rem;display:none}
+.answer-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.85rem}
+@media (max-width:900px){.answer-row{grid-template-columns:1fr}}
+#askOut{background:var(--panel);border:1px solid var(--line);padding:.9rem;display:none}
+#naive-slot{min-height:1px}
 .badge{display:inline-block;padding:.12rem .45rem;font-size:.66rem;letter-spacing:.06em;font-weight:700}
 .badge.ACTIVE{background:#163222;color:var(--green)}
 .badge.STALE{background:#3a2422;color:var(--red)}
 .badge.SUPERSEDED{background:#3a2f1a;color:var(--amber)}
 .badge.NO_EVIDENCE{background:#222;color:var(--muted)}
 .quote{margin:.65rem 0;padding:.55rem .7rem;border-left:3px solid var(--accent);color:#c5d4c9;font-size:.8rem;line-height:1.4}
+.lead{font-family:Syne,sans-serif;font-size:1.45rem;font-weight:700;margin:.35rem 0}
 details{margin-top:.65rem;font-size:.75rem;color:var(--muted)}
 details table{width:100%;border-collapse:collapse;margin-top:.35rem}
 details th,details td{text-align:left;padding:.3rem;border-bottom:1px solid var(--line);vertical-align:top}
@@ -789,40 +804,60 @@ footer{position:fixed;left:0;right:0;bottom:0;padding:.5rem 1rem;background:rgba
 footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;letter-spacing:.04em}
 .meta{color:var(--muted);font-size:.75rem}
 .err{color:var(--red)}
+#changedHero{display:none;margin:.75rem 0;border:1px solid var(--line);background:var(--panel);padding:.75rem}
+#changedHero h3{font-family:Syne,sans-serif;margin:0 0 .55rem;font-size:.95rem;color:var(--accent)}
+.hero-cols{display:grid;grid-template-columns:1fr auto 1fr;gap:.65rem;align-items:stretch}
+.hero-cols .arrow{align-self:center;color:var(--red);font-weight:700}
+.hero-card{border:1px solid var(--line);padding:.65rem;background:#0e1210;cursor:pointer}
+.hero-card.before .val{text-decoration:line-through;color:var(--red)}
+.hero-card.after .val{color:var(--green);font-weight:700}
+.hero-card .val{font-family:Syne,sans-serif;font-size:1.2rem;margin:.25rem 0}
+.hero-note{font-size:.72rem;color:var(--muted);margin-top:.55rem}
+.naive-card{background:#1a1c1d;border:1px solid #3a3a3a;padding:.9rem;color:#c8c8c8}
+.naive-card h3{margin:0 0 .4rem;font-family:Syne,sans-serif;font-size:.9rem;color:#aaa}
+.naive-card .outdated{color:var(--red);font-size:.75rem;margin-top:.5rem}
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>RECEIPTS <span>— every answer has a clip</span></h1>
-    <p class="tagline">Warehouse ops · <code id="camLabel">sdg_warehouse_cam-2</code> · Pack C · footage first, then the claim</p>
+    <h1>RECEIPTS <span>— video answers that know when they're out of date</span></h1>
+    <p class="tagline">Every answer cites its clip. When newer footage contradicts it, the answer changes. When the footage stops, it says so. · <code id="camLabel">sdg_warehouse_cam-2</code></p>
   </div>
   <div class="live-ctl">
+    <button type="button" class="demo-btn" id="runDemo" title="key d">Run demo</button>
     <label><span class="live-dot" id="liveDot"></span>
       <input type="checkbox" id="liveToggle"/> LIVE
     </label>
-    <div class="live-hint">Replay of indexed footage · player advances per segment · ~2s cadence</div>
+    <div class="live-hint">Replay of indexed footage · ~2s / segment</div>
   </div>
 </header>
 <main>
-  <div class="clock">as_of <strong id="asofLabel">—</strong> · coverage <span id="covLabel">—</span> · <span id="segLabel">…</span></div>
+  <div id="timeStrip" class="clock">Answer as of — · evidence — · footage ends —</div>
+  <div class="clock"><span id="segLabel">…</span> · scrubber <strong id="asofLabel">—</strong> · coverage <span id="covLabel">—</span></div>
   <div id="staleBanner" class="banner" hidden></div>
+  <div class="legend"><span><i class="g"></i>safe</span><span><i class="a"></i>caution (worker)</span><span><i class="r"></i>hazard (moving / blocked)</span><span><i class="s"></i>unconfirmed / stale</span></div>
 
   <div class="stage">
     <div>
       <div class="player-wrap">
-        <video id="heroVideo" controls playsinline autoplay muted></video>
+        <video id="heroVideo" playsinline autoplay muted></video>
         <div id="frameStrip" aria-label="segment frames"></div>
       </div>
+      <div class="vbar">
+        <button type="button" id="vPlay">Play</button>
+        <div class="vtrack" id="vTrack"><div class="vfill" id="vFill"></div><div class="vcite" id="vCite" hidden></div></div>
+        <span id="vTime">0:00</span>
+        <span id="playStatus">ready</span>
+      </div>
       <div class="player-meta">
-        <div>Playing <strong id="playClip">—</strong></div>
+        <div><strong id="playClip">—</strong></div>
         <div id="playRange" class="range-tag"></div>
-        <div id="playStatus">loading footage…</div>
       </div>
     </div>
     <div class="side-tiles" id="sideTiles"></div>
   </div>
-  <div class="tiles" id="tiles"></div>
+  <div id="changedHero"></div>
 
   <section>
     <h2>ASK</h2>
@@ -836,7 +871,10 @@ footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;let
       <button type="button" data-q="Is a worker present in the left aisle?">worker left aisle?</button>
       <button type="button" data-q="Is the left aisle blocked?">aisle blocked?</button>
     </div>
-    <div id="askOut"></div>
+    <div class="answer-row">
+      <div id="askOut"></div>
+      <div id="naive-slot"></div>
+    </div>
   </section>
 
   <section>
@@ -849,13 +887,19 @@ footer .chip{border:1px solid var(--line);padding:.18rem .4rem;color:#b7c7bb;let
     <div class="timeline" id="timeline"></div>
     <p class="meta" id="tlMeta"></p>
   </section>
+
+  <section id="evalPanel">
+    <h2>EVAL</h2>
+    <p class="meta">Own footage filmed at the venue today, 6 hand-labeled questions. Same claims for every system, so this isolates time handling. After the camera stopped, the 4 baselines answered with confidence; Receipts flagged stale. Labels: <code>eval/questions_real.json</code>.</p>
+    <img src="results_real.png" alt="Receipts vs baselines on venue clip" style="max-width:100%;border:1px solid var(--line);margin-top:.5rem;background:#0e1210"/>
+  </section>
 </main>
 <div id="toasts"></div>
 <footer>
   <span>Sponsor tools used</span>
   <span class="chip">VAST DataEngine</span>
   <span class="chip">NVIDIA Cosmos Reason</span>
-  <span class="chip">CoreWeave</span>
+  <span class="chip">CoreWeave GPUs</span>
   <span class="chip">Cursor</span>
 </footer>
 <script>
@@ -918,6 +962,38 @@ async function showFrames(clipId){
   }
 }
 
+function syncCiteBar(highlight, dur){
+  const cite=$('vCite');
+  if(!highlight||!dur||dur<=0){ cite.hidden=true; return; }
+  // highlight is absolute footage times; map into clip-local if possible via playRange labels only — use full bar when cited
+  cite.hidden=false;
+  cite.style.left='0%';
+  cite.style.width='100%';
+}
+function wireVideo(vid){
+  if(vid._wired) return;
+  vid._wired=true;
+  vid.addEventListener('timeupdate',()=>{
+    if(!vid.duration) return;
+    $('vFill').style.width=((vid.currentTime/vid.duration)*100)+'%';
+    $('vTime').textContent=Math.floor(vid.currentTime)+'s / '+Math.floor(vid.duration)+'s';
+    if(!vid.paused) $('playStatus').textContent='playing';
+  });
+  vid.addEventListener('play',()=>{ $('playStatus').textContent='playing'; $('vPlay').textContent='Pause'; });
+  vid.addEventListener('pause',()=>{ if(vid.ended) return; $('playStatus').textContent='paused'; $('vPlay').textContent='Play'; });
+  vid.addEventListener('ended',()=>{ $('playStatus').textContent='ended'; $('vPlay').textContent='Replay'; $('vFill').style.width='100%'; });
+  vid.addEventListener('waiting',()=>{ if(!vid.ended) $('playStatus').textContent='buffering…'; });
+  vid.addEventListener('playing',()=>{ $('playStatus').textContent='playing'; });
+  $('vPlay').onclick=()=>{
+    if(vid.ended){ vid.currentTime=0; vid.play(); return; }
+    if(vid.paused) vid.play(); else vid.pause();
+  };
+  $('vTrack').onclick=(e)=>{
+    const rect=$('vTrack').getBoundingClientRect();
+    const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+    if(vid.duration) vid.currentTime=pct*vid.duration;
+  };
+}
 function playClip(clip, {autoplay=true, highlight=null}={}){
   if(!clip||!clip.clip_id) return;
   const vid=$('heroVideo');
@@ -925,31 +1001,29 @@ function playClip(clip, {autoplay=true, highlight=null}={}){
   strip.classList.remove('show');
   strip.innerHTML='';
   vid.style.display='block';
+  wireVideo(vid);
   currentClipId=clip.clip_id;
   citeRange=highlight;
   const cam=clip.camera_id||meta.camera_id||'sdg_warehouse_cam-2';
   $('playClip').textContent=cam+' · '+shortClip(clip.clip_id);
   $('playRange').textContent=fmt(clip.t_start)+'–'+fmt(clip.t_end)
     +(highlight?(' · cited '+fmt(highlight[0])+'–'+fmt(highlight[1])):'');
-  $('playStatus').textContent='loading segment…';
+  $('playStatus').textContent='loading…';
+  $('vFill').style.width='0%';
   const url=clip.stream_url||('api/clip?clip_id='+encodeURIComponent(clip.clip_id));
   if(vid.dataset.src!==url){
     vid.dataset.src=url;
     vid.src=url;
   }
-  const onErr=()=>{ showFrames(clip.clip_id); };
-  vid.onerror=onErr;
+  vid.onerror=()=>{ showFrames(clip.clip_id); };
   vid.onloadeddata=()=>{
+    syncCiteBar(highlight, vid.duration);
     $('playStatus').textContent=autoplay?'playing':'ready';
     if(autoplay){ vid.play().catch(()=>{}); }
   };
-  // If the proxy returns JSON error, video errors quickly
   setTimeout(()=>{
     if(vid.readyState===0 && currentClipId===clip.clip_id){
-      // still nothing — try frames
-      fetch(url,{method:'GET'}).then(r=>{
-        if(!r.ok) showFrames(clip.clip_id);
-      }).catch(()=>showFrames(clip.clip_id));
+      fetch(url,{method:'GET'}).then(r=>{ if(!r.ok) showFrames(clip.clip_id); }).catch(()=>showFrames(clip.clip_id));
     }
   }, 2500);
 }
@@ -994,12 +1068,25 @@ async function refreshBoard(){
   $('covLabel').textContent=d.coverage_end_fmt||'—';
   let banner=null;
   for(const t of d.tiles){ if(t.stale_banner) banner=t.stale_banner; }
-  // Hero side: forklift + first few worker tiles
-  renderTiles(d.tiles, 'sideTiles', 4);
-  renderTiles(d.tiles.slice(4), 'tiles', 99);
+  // All tiles in one 2×3 grid beside the video (no orphans under the player)
+  renderTiles(d.tiles.slice(0,6), 'sideTiles', 6);
   const map={}; d.tiles.forEach(t=>map[t.id]=t); prevTiles=map;
   const b=$('staleBanner');
   if(banner){b.hidden=false;b.textContent=banner;} else b.hidden=true;
+  // Keep time strip current even without an ask
+  const anyStale=!!banner || d.tiles.some(t=>t.stale);
+  let evAge='—';
+  const ages=d.tiles.map(t=>t.age_sec).filter(a=>a!=null&&isFinite(a));
+  if(ages.length){
+    const sec=Math.min(...ages);
+    evAge=sec<60?(Math.round(sec)+'s old'):(Math.floor(sec/60)+'m '+(Math.round(sec)%60)+'s old');
+  }
+  const strip=$('timeStrip');
+  if(strip){
+    strip.textContent='Answer as of '+fmt(asOf)+' · evidence '+evAge
+      +' · footage ends '+(d.coverage_end_fmt||fmt(meta.t_max));
+    strip.classList.toggle('stale', anyStale);
+  }
   // Keep player on segment for current as_of unless live/ask owns it
   if(!liveOn){
     const c=clipAt(asOf);
@@ -1089,11 +1176,12 @@ function startLive(){
     if(d.type==='replay_done'){ toast('Replay complete'); return; }
     if(d.t_end!=null) setScrub(d.t_end);
     if(d.type==='segment' && d.clip_id){
-      playClip({clip_id:d.clip_id, t_start:d.t_start, t_end:d.t_end,
+      playClip({clip_id:d.clip_id, camera_id:meta.camera_id, t_start:d.t_start, t_end:d.t_end,
         stream_url:'api/clip?clip_id='+encodeURIComponent(d.clip_id)}, {autoplay:true});
     }
     if(d.type==='supersede'){
-      toast(d.toast||('SUPERSEDED: '+d.old+' → '+d.new));
+      const cam=meta.camera_id||'sdg_warehouse_cam-2';
+      toast(d.toast||('SUPERSEDED: '+d.old+' → '+d.new+' ('+cam+', '+(d.seg||'')+')'));
     }
     if(d.live_new){ toast('NEW SEGMENT from VSS'); init(); }
     refreshBoard();
@@ -1110,10 +1198,29 @@ $('liveToggle').addEventListener('change',(e)=>{
   else { stopLive(); setScrub(meta.demo_as_of||meta.t_max); refreshBoard(); refreshTimeline(); }
 });
 
+function leadAnswer(q, d){
+  const a=(d.answer==null)?'':String(d.answer).toLowerCase();
+  const ql=(q||'').toLowerCase();
+  if(d.answer==null) return 'No claim at this as_of.';
+  if(ql.includes('moving')||d.attribute==='state'){
+    if(a==='moving') return 'Yes — moving (as of '+d.as_of_fmt+')';
+    if(a==='parked') return 'No — parked (as of '+d.as_of_fmt+')';
+  }
+  if(d.attribute==='worker_present'||ql.includes('worker')){
+    if(a==='yes') return 'Yes — worker present (as of '+d.as_of_fmt+')';
+    if(a==='no') return 'No — no worker (as of '+d.as_of_fmt+')';
+  }
+  if(d.attribute==='blocked'||ql.includes('block')){
+    if(a.startsWith('yes')) return 'Yes — blocked (as of '+d.as_of_fmt+')';
+    if(a==='no'||a.includes('clear')) return 'No — clear (as of '+d.as_of_fmt+')';
+  }
+  return String(d.answer)+' (as of '+d.as_of_fmt+')';
+}
 async function doAsk(){
   const q=$('q').value;
   const r=await fetch('api/ask?q='+encodeURIComponent(q)+'&as_of='+encodeURIComponent(asOf));
   const d=await r.json();
+  window._lastAsk=d;
   const el=$('askOut');
   el.style.display='block';
   let audit='';
@@ -1122,30 +1229,118 @@ async function doAsk(){
       +d.audit.map(a=>'<tr><td><code>'+esc(a.rule_id)+'</code></td><td>'+esc(a.value)+'</td><td style="word-break:break-all">'+esc(a.clip_id||'')+'</td><td>'+fmt(a.observed_at)+'</td></tr>').join('')
       +'</table></details>';
   }
-  const ans=d.answer==null?'(no claim)':d.answer;
   const staleBadge=d.stale?' <span class="badge STALE">STALE</span>':'';
   const quote=d.caption ? '<div class="quote">“'+esc(d.caption)+'”</div>' : '';
   el.innerHTML=
     '<p><span class="badge '+(d.status||'')+'">'+(d.status||'')+'</span>'+staleBadge
-    +(d.rule_id?' · created by <code>'+esc(d.rule_id)+'</code>':'')+'</p>'
-    +'<div style="font-family:Syne,sans-serif;font-size:1.45rem;margin:.35rem 0">'+esc(String(ans))+'</div>'
+    +(d.rule_id?' · <code>'+esc(d.rule_id)+'</code>':'')+'</p>'
+    +'<div class="lead">'+esc(leadAnswer(q,d))+'</div>'
     +'<p class="meta"><code>'+esc(d.entity)+'</code> / <code>'+esc(d.attribute)+'</code> @ <code>'+esc(d.camera_id)
-    +'</code> · as_of '+esc(d.as_of_fmt)+'</p>'
-    +(d.clip_id?'<p class="meta">Cited '+esc(d.segment_label||'')+' · <code>'+esc(d.clip_id)+'</code> · '+esc(d.t_start_fmt)+'–'+esc(d.t_end_fmt)+'</p>':'')
+    +'</code></p>'
+    +(d.clip_id?'<p class="meta" title="'+esc(d.clip_id)+'">Cited '+esc(shortClip(d.clip_id))+' · '+esc(d.t_start_fmt)+'–'+esc(d.t_end_fmt)+'</p>':'')
     +quote
     +(d.stale&&d.stale_reason?'<p class="err">'+esc(d.stale_reason)+'</p>':'')
     +(d.data_gap_note?'<p class="meta">'+esc(d.data_gap_note)+'</p>':'')
     +audit;
   if(d.clip_id){
     playClip({
-      clip_id:d.clip_id,
-      t_start:d.t_start,
-      t_end:d.t_end,
-      stream_url:d.stream_url
+      clip_id:d.clip_id, camera_id:d.camera_id,
+      t_start:d.t_start, t_end:d.t_end, stream_url:d.stream_url
     }, {autoplay:true, highlight:[d.t_start,d.t_end]});
     refreshTimeline();
   }
+  updateTimeStrip(d);
+  renderNaive(q,d);
+  renderChangedHero(d);
 }
+
+function updateTimeStrip(d){
+  const el=$('timeStrip');
+  if(!el) return;
+  const asf=(d&&d.as_of_fmt)||fmt(asOf);
+  const cov=$('covLabel').textContent||meta.coverage_end_fmt||fmt(meta.t_max);
+  let age='—';
+  if(d&&d.t_end!=null){
+    const sec=Math.max(0,Math.round(asOf-d.t_end));
+    age=sec<60?(sec+'s old'):(Math.floor(sec/60)+'m '+(sec%60)+'s old');
+  }
+  el.textContent='Answer as of '+asf+' · evidence '+age+' · footage ends '+cov;
+  el.classList.toggle('stale', !!(d&&d.stale));
+}
+
+async function renderNaive(q, receipts){
+  const slot=$('naive-slot');
+  if(!slot||!receipts) return;
+  const entity=receipts.entity, attribute=receipts.attribute;
+  const r=await fetch('api/naive?q='+encodeURIComponent(q)
+    +'&entity='+encodeURIComponent(entity)+'&attribute='+encodeURIComponent(attribute));
+  if(!r.ok){ slot.innerHTML=''; return; }
+  const n=await r.json();
+  const ans=n.answer==null?'(no match)':n.answer;
+  let out='';
+  if(n.answer!=null && receipts.answer!=null && String(n.answer).toLowerCase()!=String(receipts.answer).toLowerCase()){
+    out='<p class="outdated">OUTDATED: answered from older footage ('+fmt(n.t_start)
+      +') — Receipts uses '+esc(receipts.as_of_fmt||fmt(asOf))+'</p>';
+  } else if(n.answer!=null && receipts.answer!=null){
+    out='<p class="meta">Agrees with Receipts on this question (no time conflict in the index).</p>';
+  }
+  slot.innerHTML='<div class="naive-card"><h3>Typical video agent (retrieval-only, simulated)</h3>'
+    +'<div class="lead">'+esc(String(ans))+'</div>'
+    +(n.caption?'<div class="quote">“'+esc((n.caption||'').slice(0,320))+'”</div>':'')
+    +'<p class="meta">No timestamp · '+esc(n.method||'')+'</p>'
+    +out+'</div>';
+}
+
+function renderChangedHero(d){
+  const el=$('changedHero');
+  if(!el) return;
+  const hist=(d&&d.history)||[];
+  if(!d||!d.answer||!hist.length){ el.style.display='none'; el.innerHTML=''; return; }
+  const old=hist[hist.length-1];
+  el.style.display='block';
+  el.innerHTML='<h3>ANSWER CHANGED</h3><div class="hero-cols">'
+    +'<div class="hero-card before" id="heroBefore"><div class="meta">BEFORE</div><div class="val">'+esc(old.value)
+    +'</div><div class="meta">'+esc(shortClip(old.clip_id))+' · '+fmt(old.t_start)+'–'+fmt(old.t_end)
+    +'</div><div class="meta">[play older clip]</div></div>'
+    +'<div class="arrow">→</div>'
+    +'<div class="hero-card after" id="heroAfter"><div class="meta">AFTER</div><div class="val">'+esc(d.answer)
+    +'</div><div class="meta">'+esc(shortClip(d.clip_id))+' · '+esc(d.t_start_fmt)+'–'+esc(d.t_end_fmt)
+    +'</div><div class="meta">[play newer clip]</div></div></div>'
+    +'<p class="hero-note">Replaced because newer footage from the same camera contradicts it.</p>';
+  $('heroBefore').onclick=()=>playClip({clip_id:old.clip_id,camera_id:d.camera_id,t_start:old.t_start,t_end:old.t_end},{autoplay:true,highlight:[old.t_start,old.t_end]});
+  $('heroAfter').onclick=()=>playClip({clip_id:d.clip_id,camera_id:d.camera_id,t_start:d.t_start,t_end:d.t_end,stream_url:d.stream_url},{autoplay:true,highlight:[d.t_start,d.t_end]});
+}
+
+let demoRunning=false;
+async function runDemo(){
+  if(demoRunning||!meta.ready) return;
+  demoRunning=true;
+  try{
+    const cam=meta.camera_id||'sdg_warehouse_cam-2';
+    $('q').value='Is the forklift on '+cam+' moving?';
+    // Land on supersede moment (parked after moving)
+    setScrub(meta.demo_as_of!=null?meta.demo_as_of:meta.t_max);
+    await refreshBoard();
+    await doAsk();
+    await new Promise(r=>setTimeout(r,2500));
+    // Scrub past end of coverage → STALE
+    const past=Math.ceil((meta.t_max||asOf)+180);
+    const sl=$('scrub');
+    if(Number(sl.max)<past) sl.max=past;
+    setScrub(past);
+    await refreshBoard();
+    await doAsk();
+    toast('Demo complete — supersede + stale on the same question');
+  } finally { demoRunning=false; }
+}
+$('runDemo').addEventListener('click', runDemo);
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='d'||e.key==='D'){
+    if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+    e.preventDefault(); runDemo();
+  }
+});
+
 $('askBtn').addEventListener('click', doAsk);
 document.querySelectorAll('.presets button').forEach(b=>{
   b.addEventListener('click',()=>{ $('q').value=b.dataset.q; doAsk(); });
@@ -1296,6 +1491,19 @@ class Handler(BaseHTTPRequestHandler):
                 attribute = q["attribute"][0]
             as_of = (q.get("as_of") or [str(STATE["t_max"])])[0]
             return self._send(200, json.dumps(ask(entity, attribute, as_of)), "application/json")
+        if path == "/api/naive":
+            if not STATE["ready"] or STATE["store"] is None:
+                return self._send(503, json.dumps({"error": STATE["error"] or "not ready"}),
+                                  "application/json")
+            q = parse_qs(parsed.query)
+            question = (q.get("q") or [""])[0]
+            entity = (q.get("entity") or [None])[0]
+            attribute = (q.get("attribute") or [None])[0]
+            if not entity or not attribute:
+                entity, attribute = parse_nl_question(question)
+            return self._send(200, json.dumps(naive_answer(
+                STATE["store"], question, entity, attribute, camera_id=CAMERA,
+            )), "application/json")
         if path == "/api/live":
             if not STATE["ready"]:
                 return self._send(503, json.dumps({"error": "not ready"}), "application/json")
@@ -1399,6 +1607,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, b"no frame", "text/plain")
             data = open(paths[i], "rb").read()
             return self._send(200, data, "image/jpeg")
+        if path in ("/results_real.png", "/app/results_real.png"):
+            png = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results_real.png")
+            if not os.path.isfile(png):
+                return self._send(404, b"missing", "text/plain")
+            return self._send(200, open(png, "rb").read(), "image/png")
         if path in ("/", "/index.html", "/app"):
             return self._send(200, PAGE)
         return self._send(404, "not found")
