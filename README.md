@@ -30,17 +30,58 @@ Video agents answer from whatever footage they retrieved, and they answer with c
 
 The core is deterministic Python 3 and sqlite3, no model calls. The model only sits at the ingest edge (`ingest_adapter.CosmosSource`).
 
-## Run it
+## Architecture
 
-    python3 fixtures/demo_scenario.py        # synthetic: ask, ingest newer clip, ask again, see SUPERSEDED + new clip
-    python3 eval/score.py                    # 25-question table, Receipts vs 3 baselines
-    python3 -m unittest discover -s tests -v
-    python3 run_vss.py                       # Pack C warehouse segments → receipts.db (needs VSS env)
-    python3 viewer/ingest_clips.py && python3 viewer/serve.py   # local clip viewer: boxes + claims over time, see viewer/README.md
+```mermaid
+flowchart LR
+  subgraph edge["Ingest edge (the only model calls)"]
+    V["Video clips"] --> C["Cosmos Reason captions<br/>vss_source.py (via VSS), cosmos_client.py"]
+    V --> Y["YOLO11 tracks in clip sidecars<br/>viewer/detect.py"]
+    V --> YD["YOLO11 detections from VSS<br/>(box overlay in the web app only)"]
+  end
+  C --> CL["Claims: entity, attribute, value, location,<br/>clip, t_start-t_end, confidence<br/>ingest_adapter.py"]
+  Y -->|"zone occupancy<br/>tracks_to_claims"| CL
+  CL --> S["Supersede rules<br/>supersede.py"]
+  S --> DB[("SQLite: claims, evidence, audit<br/>claims.py")]
+  Q["Question + as_of"] --> A["answer.py"]
+  DB --> A
+  A --> OK["Answer + cited clip and interval<br/>+ superseded history"]
+  A --> ST["STALE: footage ended or<br/>older than max_age"]
+  A --> NE["No evidence: no answer"]
+  subgraph base["Baselines (eval and live comparison cards)"]
+    N["naive.py: retrieval-only over captions"]
+    B["baselines.py: latest clip, RAG-all, last-2 window"]
+    G["baselines_gemini.py: Gemini Flash on the clip cut at as_of"]
+    AQ["agentqa.py, baselines_vss.py: event VSS agent-qa"]
+  end
+  C -.-> N
+  C -.-> AQ
+  DB -.->|"raw sightings, no supersession"| B
+```
+
+- **Sidecars** (`clips/*.meta.json`, `viewer/sidecar.py`) hold hand/VLM-labeled segments and YOLO tracks for the local clips. A segment says a state holds over its whole interval, so its claim becomes answerable from the segment start; model captions become answerable at their interval end.
+- **Claims** are keyed by (entity, attribute, location). Every sighting is a row in `evidence`, so a corroborated claim cites the most recent clip that showed it.
+- **Supersede** (`supersede.py`) is deterministic and writes a rule ID for every decision: `FIRST_CLAIM`, `SUPERSEDE_NEWER_CONTRADICTS`, `CORROBORATE_SAME_VALUE`, `OLDER_OR_TIED_CONTRADICTION`. Nothing is deleted.
+- **Answer** (`answer.py`) only reads claims observed at or before `as_of`, so it can be replayed at any past time. A claim superseded after `as_of` is still the answer at `as_of`.
+- **Baselines** read the same store (or the same captions) without supersession, so the comparison isolates time handling. `naive.py` and `agentqa.py` back the live app's comparison cards; the VSS agent-qa and LLM-over-captions baselines did not return answers in our scored runs (see below).
+- `webapp/` holds the deployed app's own copy of the core modules; the root modules are what the tests, eval and local viewer use.
+
+## Run locally
+
+Python 3.9+ standard library only for everything below; no GPU, network or API keys.
+
+    git clone https://github.com/HarshShroff/receipts-vast-hack.git && cd receipts-vast-hack
+    python3 fixtures/demo_scenario.py            # synthetic: ask, ingest newer clip, ask again, see SUPERSEDED + new clip
+    python3 eval/score.py                        # 25-question synthetic table, Receipts vs baselines
+    python3 -m unittest discover -s tests        # 104 tests, external APIs mocked
+    python3 viewer/ingest_clips.py               # committed clips + sidecars -> viewer/receipts.db
+    python3 viewer/serve.py                      # http://127.0.0.1:8765 (clip viewer), /compare (model comparison)
+
+The venue eval (`eval/compare.py`, see Evaluation) additionally needs `matplotlib` for its chart. Things that need the event environment or keys, not runnable from a clean clone: `python3 run_vss.py` (team VSS credentials), `eval/compare.py --live` (VSS + W&B), `eval/compare.py --gemini` without `--gemini-offline` (`GEMINI_API_KEY`), `viewer/detect.py` (ultralytics/torch).
 
 ## Running on VAST
 
-Pack C warehouse safety demo (`sdg_warehouse_cam-2` / `warehouse3`):
+Pack C warehouse safety demo (`sdg_warehouse_cam-2` / `warehouse3`). This warehouse footage is NVIDIA synthetic data supplied by the event, not a real camera; the only real footage we scored is the venue clip (`clips/person_moving.mp4`).
 
 1. Env comes from `/config/<team>.config` (`INGRESS_URL`, `USERNAME`, `PASSWORD`, S3/VastDB names). Do not commit secrets.
 2. `python3 run_vss.py` logs into the team VSS, pulls explore timelines, maps Cosmos captions → claims, writes `receipts.db`, prints rule results (including `SUPERSEDE_NEWER_CONTRADICTS`).
@@ -66,14 +107,14 @@ Metrics: exact match; Acc@GQA (exact answer AND correct clip AND interval IoU >=
 
 | set | questions | Receipts exact | Receipts stale-claim rate | best baseline exact | best baseline stale-claim rate |
 |---|---|---|---|---|---|
-| synthetic | 25 | 25/25 | 0/23 | 15/25 (RAG-all) | 9/24 |
+| synthetic | 25 | 25/25 | 0/23 | 22/25 (last-2-clips window); RAG-all with oldest-wins ties 15/25 | 2/24 (last-2 window); 9/24 (RAG-all, oldest-wins) |
 | own venue clip, hand-labeled | 6 (1 after footage ends) | 6/6 | 0/6 | 5/6 (latest-clip, newest-wins retrieval, last-2 window) | 0/6, but 0/1 flagged the after-footage question as stale |
 
-The venue row uses `clips/person_moving.mp4`, filmed at the event: 6 questions about where one person is relative to a pillar, positions labeled by eye at 2 fps (not by Cosmos or YOLO). All systems get the same claims (the labels), so this row isolates time handling, not caption extraction. Retrieve-everything with oldest-wins ties scored 2/6 and answered 5/6 from an outdated position. Asked 6 s after the clip ended, all four memory baselines answered with confidence; Receipts flagged the answer stale. A Gemini Flash baseline that re-watches the clip cut at the question time (allowed to answer 'unknown') also scored 6/6, with 4/6 citations inside the labeled interval vs 5/6 for Receipts; one of its three runs on the after-footage question is missing (free-tier quota). Receipts reaches the same answers from stored claims without re-reading video per question, and keeps an audit trail. The team VSS agent-qa and an LLM-over-captions baseline were wired (`baselines_vss.py`) but did not return answers in our runs, so they are not scored. Reproduce: `python3 eval/compare.py --db /tmp/eval.db`.
+The venue row uses `clips/person_moving.mp4`, filmed at the event: 6 questions about where one person is relative to a pillar, positions labeled by eye at 2 fps (not by Cosmos or YOLO). All systems get the same claims (the labels), so this row isolates time handling, not caption extraction. Retrieve-everything with oldest-wins ties scored 2/6 and answered 5/6 from an outdated position. Asked 6 s after the clip ended, all four memory baselines answered with confidence; Receipts flagged the answer stale. A Gemini Flash baseline that re-watches the clip cut at the question time (allowed to answer 'unknown') also scored 6/6, with 4/6 citations inside the labeled interval vs 5/6 for Receipts; one of its three runs on the after-footage question is missing (free-tier quota). Receipts reaches the same answers from stored claims without re-reading video per question, and keeps an audit trail. The team VSS agent-qa and an LLM-over-captions baseline were wired (`baselines_vss.py`) but did not return answers in our runs, so they are not scored. Reproduce: `python3 eval/compare.py --db /tmp/eval.db --out /tmp/eval_out` (needs `matplotlib` for the chart; without `--out` it overwrites the committed `eval/out/results_real.*`).
 
-**Gemini Flash watching the video** (`gemini-3.8-flash` via AI Studio, `python3 eval/compare.py --db /tmp/eval.db --gemini`). This system gets pixels, not claims: for each question the clip is cut at the question time (720p, sampled at 2 fps, temperature 0), and the prompt gives the same facts Receipts has: clip clock start, what the video covers, the question time, and Receipts' stale rule in words ("set stale to true if your answer relies on footage that ends before the question time, or on evidence more than 900 seconds older"). It picks one answer from the label vocabulary or "unknown" and cites seconds in the video. Full prompt: `baselines_gemini.PROMPT_FULL`. Result: 6/6, with the after-footage question flagged stale, so it ties Receipts on this set. Its cited interval fell inside the label on 4/6 (r04 cited 5.5–6.5 s against 6–7 s; r06 cited the last position seen). 17 of 18 calls completed: all 3 runs agreed on r01–r05, 2/2 on r06, and the third r06 run hit the free-tier quota (20 requests/day) and is reported missing, not filled in. Raw responses are committed in `eval/out/gemini_cache/`, so `--gemini-offline --gemini-model gemini-3.8-flash` reproduces the row without a key. What this shows: a frontier video model that is told the clock and the rule can apply it on one 9 s clip. It does not show how it behaves without the rule, over hours of footage, or when the question is about state seen many clips ago, which is where a claim store is meant to help. Side-by-side page: `python3 viewer/serve.py`, then open `/compare`.
+**Gemini Flash watching the video** (`gemini-3.8-flash` via AI Studio, `python3 eval/compare.py --db /tmp/eval.db --gemini`). This system gets pixels, not claims: for each question the clip is cut at the question time (720p, sampled at 2 fps, temperature 0), and the prompt gives the same facts Receipts has: clip clock start, what the video covers, the question time, and Receipts' stale rule in words ("set stale to true if your answer relies on footage that ends before the question time, or on evidence more than 900 seconds older"). It picks one answer from the label vocabulary or "unknown" and cites seconds in the video. Full prompt: `baselines_gemini.PROMPT_FULL`. Result: 6/6, with the after-footage question flagged stale, so it ties Receipts on this set. Its cited interval fell inside the label on 4/6 (r04 cited 5.5–6.5 s against 6–7 s; r06 cited the last position seen). 17 of 18 calls completed: all 3 runs agreed on r01–r05, 2/2 on r06, and the third r06 run hit the free-tier quota (20 requests/day) and is reported missing, not filled in. Raw responses are committed in `eval/out/gemini_cache/`, so `--gemini --gemini-offline --gemini-model gemini-3.8-flash` reproduces the row without a key. What this shows: a frontier video model that is told the clock and the rule can apply it on one 9 s clip. It does not show how it behaves without the rule, over hours of footage, or when the question is about state seen many clips ago, which is where a claim store is meant to help. Side-by-side page: `python3 viewer/serve.py`, then open `/compare`.
 
-Read the synthetic row carefully. The labels were written against the same scenario the rule engine runs on, so 25/25 shows the plumbing works, not that the approach generalises. The informative part is how the baselines fail: retrieval-style memory returns the old state when both states are in the index. Real numbers need real labeled clips, and the real-clip row is the only one that should be used to judge the idea. Counts only, small n, no significance claims.
+Read the synthetic row carefully. It is a scripted scenario (`fixtures/demo_scenario.py`: three made-up clips with hand-written claims), not video. The labels were written against the same scenario the rule engine runs on, so 25/25 shows the plumbing works, not that the approach generalises. The informative part is how the baselines fail: retrieval-style memory returns the old state when both states are in the index. Real numbers need real labeled clips, and the real-clip row is the only one that should be used to judge the idea. Counts only, small n, no significance claims.
 
 ## Limitations
 
