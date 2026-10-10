@@ -331,13 +331,23 @@ def ask(entity, attribute, location, as_of, max_age=MAX_AGE_DEFAULT):
            "stale": bool(r["stale"]), "stale_reason": r["stale_reason"],
            "data_gap_note": r["data_gap_note"], "claim_id": r["claim_id"],
            "created_rule": created_rule(store, r["claim_id"]) if r["claim_id"] else None,
-           "current_status": None, "as_of": as_of, "max_age": max_age,
+           "current_status": None, "superseded_later": None, "as_of": as_of, "max_age": max_age,
            "key": {"entity": norm(entity), "attribute": norm(attribute), "location": norm(location)},
            "history": []}
     if r["claim_id"]:
-        row = store.db.execute("SELECT status FROM claims WHERE id=?", (r["claim_id"],)).fetchone()
+        row = store.db.execute(
+            """SELECT c.status, s.value AS sb_value, s.clip_id AS sb_clip, s.observed_at AS sb_obs
+               FROM claims c LEFT JOIN claims s ON s.id = c.superseded_by WHERE c.id=?""",
+            (r["claim_id"],)).fetchone()
         out["current_status"] = row["status"].upper() if row else None
         out.update(cite(r["clip_id"], r["t_start"], r["t_end"]))
+        # current_status is the claim's status in the whole store (footage after as_of included).
+        # answer() never returns a claim already superseded at as_of, so SUPERSEDED here always
+        # means "replaced later"; say by what and when so the page does not look contradictory.
+        if row and row["sb_obs"] is not None:
+            sb = cite(row["sb_clip"], row["sb_obs"], row["sb_obs"])
+            out["superseded_later"] = {"value": row["sb_value"], "clip_id": row["sb_clip"],
+                                       "at": row["sb_obs"], "rel_at": sb["rel_t_start"]}
     for h in r.get("history") or []:
         out["history"].append(dict(cite(h["clip_id"], h["t_start"], h["t_end"]),
                                    claim_id=h["claim_id"], value=h["value"], status="SUPERSEDED",

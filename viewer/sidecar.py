@@ -197,7 +197,8 @@ def track_zone_intervals(track, zones, min_dur=0.2):
 
 
 def segment_claims(meta):
-    """Flatten segments[].claims[] with defaults, ordered by when they end (= observed_at)."""
+    """Flatten segments[].claims[] with defaults, ordered by when they start (= observed_at,
+    see SidecarSource.observe_at_start)."""
     scene = meta.get("scene") or meta["clip_id"]
     out = []
     for seg in meta.get("segments") or []:
@@ -207,7 +208,7 @@ def segment_claims(meta):
                         "t_start": c.get("t_start", seg["t_start"]),
                         "t_end": c.get("t_end", seg["t_end"]),
                         "confidence": c.get("confidence", seg.get("confidence", 0.8))})
-    out.sort(key=lambda c: (c["t_end"], c["t_start"]))
+    out.sort(key=lambda c: (c["t_start"], c["t_end"]))
     return out
 
 
@@ -216,7 +217,7 @@ def track_claims(meta):
     scene = meta.get("scene") or meta["clip_id"]
     zones = meta.get("zones") or {}
     intervals = [iv for tr in meta.get("tracks") or [] for iv in track_zone_intervals(tr, zones)]
-    intervals.sort(key=lambda i: (i["t_end"], i["t_start"]))
+    intervals.sort(key=lambda i: (i["t_start"], i["t_end"]))
     claims = tracks_to_claims(intervals)
     for c in claims:
         c["location"] = scene
@@ -228,6 +229,10 @@ class SidecarSource(ClaimSource):
     kind='segments' yields the hand/VLM claims, kind='tracks' the detector zone claims, so one
     clip is ingested twice with a distinct `source` label in the claims table."""
     relative = True
+    # Sidecar segments and track runs are interval labels: the state is on screen from t_start,
+    # so it must be answerable from t_start, matching the segment lane the page highlights.
+    # (With the default t_end, person_moving at 0:04-0:08 still answered "behind_pole".)
+    observe_at_start = True
 
     def __init__(self, metas_by_clip_id, kind="segments", source=None):
         if kind not in ("segments", "tracks"):

@@ -36,6 +36,11 @@ Known entities: {entities}"""
 
 class ClaimSource(ABC):
     relative = True  # t_start/t_end are offsets from the clip start
+    # When a claim becomes visible to answer(). False (default): at t_end, i.e. once the whole
+    # interval has been watched (model captions). True: at t_start, for interval labels that say
+    # "this state holds throughout [t_start, t_end]" (viewer sidecars; same convention as
+    # eval/compare.py), so a question asked mid-interval sees the state already on screen.
+    observe_at_start = False
 
     @abstractmethod
     def extract(self, clip):
@@ -91,9 +96,12 @@ def ingest_clip(store, clip, source, model_name=None):
                    clip.get("path", ""))
     base = parse_t(clip["t_start"]) if source.relative else 0.0
     results = []
+    at_start = getattr(source, "observe_at_start", False)
     for c in source.extract(clip):
+        t_start = base + parse_t(c["t_start"])
         results.append(ingest_claim(
             store, c["entity"], c["attribute"], c["value"], clip["clip_id"],
-            base + parse_t(c["t_start"]), base + parse_t(c["t_end"]), c.get("location", ""),
-            c.get("confidence", 0.8), model_name or getattr(source, "source", type(source).__name__)))
+            t_start, base + parse_t(c["t_end"]), c.get("location", ""),
+            c.get("confidence", 0.8), model_name or getattr(source, "source", type(source).__name__),
+            observed_at=t_start if at_start else None))
     return results
