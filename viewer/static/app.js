@@ -114,7 +114,7 @@ async function loadClips() {
     sel.appendChild(g);
   }
   const asof = $('#asof');
-  asof.min = d.t_min; asof.max = d.t_max; asof.value = d.t_max;
+  asof.min = d.t_min; asof.max = d.t_max; asof.value = d.t_max; asof.dataset.exact = d.t_max;
   $('#asofval').textContent = fmtAbs(d.t_max);
   $('#maxage').value = d.max_age_default;
   const notes = [];
@@ -477,18 +477,21 @@ function syncAsOf(t) {
   if (!$('#follow').checked || !state.clip) return;
   const v = Math.min(state.tmax, state.clip.t_start + t);
   $('#asof').value = v;
+  $('#asof').dataset.exact = v;  // the range input snaps to step 0.1; ask() sends the exact time
   $('#asofval').textContent = fmtAbs(v);
 }
 
 async function ask() {
   const q = new URLSearchParams({entity: $('#entity').value, attribute: $('#attribute').value,
-    location: $('#location').value, as_of: $('#asof').value, max_age: $('#maxage').value});
+    location: $('#location').value, as_of: $('#asof').dataset.exact ?? $('#asof').value, max_age: $('#maxage').value});
   const el = $('#result');
   el.hidden = false;
   try {
     const d = await getJSON('api/answer?' + q);
     const freshness = d.claim_id ? badge(d.stale ? 'STALE' : 'FRESH') : '';
-    const later = d.current_status === 'SUPERSEDED' ? ' <span class="meta">(superseded by later footage)</span>' : '';
+    const sl = d.superseded_later;
+    const later = d.current_status === 'SUPERSEDED'
+      ? ` <span class="meta">(active at as_of; superseded later${sl ? ` by <code>${esc(sl.value)}</code> at ${fmtAbs(sl.at)}` : ''})</span>` : '';
     const cite = d.clip_id ? `<p class="meta">Cited clip <code>${esc(d.clip_id)}</code> ${fmtRel(d.rel_t_start)}–${fmtRel(d.rel_t_end)}`
       + ` (timeline ${fmtAbs(d.t_start)}–${fmtAbs(d.t_end)}) · created by <code>${esc(d.created_rule || '')}</code>`
       + ` <button class="small" data-cite="${esc(d.clip_id)}" data-t0="${d.rel_t_start}" data-t1="${d.rel_t_end}">jump to citation ↗</button></p>` : '';
@@ -520,7 +523,7 @@ async function ask() {
 $('#clip').addEventListener('change', e => selectClip(e.target.value));
 $('#zones').addEventListener('change', () => draw(video.currentTime));
 $('#labels').addEventListener('change', () => draw(video.currentTime));
-$('#asof').addEventListener('input', e => { $('#follow').checked = false; $('#asofval').textContent = fmtAbs(Number(e.target.value)); });
+$('#asof').addEventListener('input', e => { delete e.target.dataset.exact; $('#follow').checked = false; $('#asofval').textContent = fmtAbs(Number(e.target.value)); });
 $('#ask').addEventListener('click', ask);
 video.addEventListener('loadedmetadata', () => { resizeCanvas(); renderTimeline(); });
 video.addEventListener('seeked', () => draw(video.currentTime));

@@ -185,8 +185,10 @@ class BridgeTimeline(unittest.TestCase):
 
     def test_answers_over_time(self):
         key = ("underpass", "state", "bridge")
-        self.assertIsNone(answer(self.store, key, 5, max_age=20)["answer"])  # claim is known at its t_end (9.0)
-        self.assertEqual(answer(self.store, key, 9.5, max_age=20)["answer"], "clear")
+        # Sidecar claims are visible from their segment start (0.0), not its end (9.0).
+        self.assertIsNone(answer(self.store, key, -1, max_age=20)["answer"])
+        self.assertEqual(answer(self.store, key, 5, max_age=20)["answer"], "clear")
+        self.assertEqual(answer(self.store, key, 9.5, max_age=20)["answer"], "blocked")  # clip 2 from 9.009
         r = answer(self.store, key, 20, max_age=20)
         self.assertEqual((r["answer"], r["clip_id"], r["stale"]), ("blocked", "bridge_02_truck_stuck", False))
         r = answer(self.store, key, 60, max_age=20)
@@ -324,8 +326,12 @@ class ServeHandlers(unittest.TestCase):
         self.assertEqual((d["answer"], d["clip_id"], d["claim_status"], d["stale"]),
                          ("blocked", "bridge_02_truck_stuck", "ACTIVE", False))
         self.assertEqual((d["created_rule"], d["current_status"]), ("SUPERSEDE_NEWER_CONTRADICTS", "SUPERSEDED"))
-        self.assertAlmostEqual(d["rel_t_start"], 0.0)
-        self.assertAlmostEqual(d["rel_t_end"], 6.0, places=4)
+        # At 20 s the "scene" segment (clip 6.0-35.0 s, from timeline 15.0) is already on screen and
+        # corroborates "blocked", so it is the latest sighting cited.
+        self.assertAlmostEqual(d["rel_t_start"], 6.0, places=4)
+        self.assertAlmostEqual(d["rel_t_end"], 35.0016, places=4)
+        self.assertEqual(d["superseded_later"]["value"], "clear")
+        self.assertEqual(d["superseded_later"]["clip_id"], "bridge_03_road_clear_again")
         _, _, body = self.get("/api/answer?entity=underpass&attribute=state&location=bridge&as_of=60&max_age=5")
         d = json.loads(body)
         self.assertEqual((d["answer"], d["claim_status"], d["stale"]), ("clear", "ACTIVE", True))
@@ -336,6 +342,37 @@ class ServeHandlers(unittest.TestCase):
         self.assertEqual(self.get("/api/answer?entity=x")[0], 400)
         _, _, body = self.get("/api/keys")
         self.assertIn({"entity": "underpass", "attribute": "state", "location": "bridge", "n": 3}, json.loads(body))
+
+
+    def test_person_moving_answer_matches_segment_lane(self):
+        # Regression: claims were only visible at their segment END, so at clip 0:04-0:08 (lane shows
+        # right_of_pole) the answer was still behind_pole, badged ACTIVE + "superseded by later
+        # footage". The slider also snapped as_of to 0.1 s, so 0:08 landed just before 0:08.02.
+        clips = json.loads(self.get("/api/clips")[2])["clips"]
+        t0 = next(c["t_start"] for c in clips if c["clip_id"] == "person_moving")
+
+        def ask(rel, slider=False):
+            as_of = round(t0 + rel, 1) if slider else t0 + rel
+            q = "/api/answer?entity=person&attribute=position&location=venue&as_of=%r" % as_of
+            return json.loads(self.get(q)[2])
+
+        for rel, want in [(0.5, "left_of_pole"), (2.5, "behind_pole"), (4.0, "right_of_pole"),
+                          (6.0, "right_of_pole"), (8.0, "right_of_pole")]:
+            # A 0.1 s-snapped value can land before an exact segment boundary (4.0), so only check
+            # snapping off-boundary; the page now sends the exact follow time instead.
+            for slider in ((False,) if rel == 4.0 else (False, True)):
+                d = ask(rel, slider)
+                self.assertEqual(d["answer"], want, msg=(rel, slider))
+        d = ask(8.0, slider=True)
+        self.assertEqual((d["claim_status"], d["current_status"], d["stale"]), ("ACTIVE", "ACTIVE", False))
+        self.assertIsNone(d["superseded_later"])
+        self.assertAlmostEqual(d["rel_t_start"], 4.0, places=4)
+        # Earlier answer: the "superseded" note now says it happened AFTER as_of, and when.
+        d = ask(2.5)
+        self.assertEqual(d["current_status"], "SUPERSEDED")
+        self.assertEqual(d["superseded_later"]["value"], "right_of_pole")
+        self.assertAlmostEqual(d["superseded_later"]["rel_at"], 4.0, places=4)
+        self.assertGreater(d["superseded_later"]["at"], d["as_of"])
 
 
 class CompareApi(unittest.TestCase):
